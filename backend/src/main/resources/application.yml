@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: recall
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/recall}
+    username: ${SPRING_DATASOURCE_USERNAME:recall}
+    password: ${SPRING_DATASOURCE_PASSWORD:recall}
+  jpa:
+    hibernate:
+      ddl-auto: none          # schema is owned by Flyway
+    open-in-view: false
+    properties:
+      hibernate.format_sql: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  docker:
+    compose:
+      enabled: false          # DB is provided by the root docker-compose.yml
+
+server:
+  port: ${BACKEND_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+recall:
+  llm:
+    api-key: ${RECALL_LLM_API_KEY:}
+    base-url: ${RECALL_LLM_BASE_URL:https://api.anthropic.com}
+    model-strong: ${RECALL_LLM_MODEL_STRONG:claude-opus-4-8}
+    model-cheap: ${RECALL_LLM_MODEL_CHEAP:claude-haiku-4-5-20251001}
+    model-embed: ${RECALL_LLM_MODEL_EMBED:voyage-3}
