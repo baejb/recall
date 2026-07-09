@@ -11,21 +11,15 @@
 
 ## 실행
 
-```bash
-cp .env.example .env      # LLM API 키 등 입력
-docker compose up --build
-```
-
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8080
-- DB: localhost:5432
-
-로컬 개발:
+Docker로는 DB(pgvector)만 띄우고, 백엔드·프론트는 로컬에서 실행한다.
 
 ```bash
-docker compose up -d postgres
-cd backend && ./gradlew bootRun
-cd frontend && npm install && npm run dev
+cp .env.example .env      # DB / LLM API 키 등 입력
+
+docker compose up -d      # PostgreSQL + pgvector (localhost:5432)
+
+cd backend && ./gradlew bootRun          # http://localhost:8080
+cd frontend && npm install && npm run dev # http://localhost:3000
 ```
 
 ## 구조
