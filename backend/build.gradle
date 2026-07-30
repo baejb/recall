@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.diffplug.spotless' version '7.0.2'
 }
 
 group = 'com.recall'
@@ -36,4 +37,15 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// 기존 코드가 4칸 들여쓰기이므로 google-java-format 의 AOSP(4칸) 스타일로 맞춘다.
+// 포맷 검사: ./gradlew spotlessCheck   ·   자동 정리: ./gradlew spotlessApply
+spotless {
+	java {
+		googleJavaFormat('1.25.2').aosp()
+		removeUnusedImports()
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
 }

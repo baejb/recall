@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# 커밋 강제 검사 게이트. scripts/setup-hooks.sh 로 1회 활성화한다.
+# 우회(--no-verify)하지 않는다 — 실패하면 원인을 고친다.
+set -euo pipefail
+
+fail=0
+staged=$(git diff --cached --name-only --diff-filter=ACM || true)
+[ -z "$staged" ] && exit 0
+
+# 1) 비밀/환경 파일 커밋 차단
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    .env|.env.*|*.p12|*.jks|*.pem|*.key)
+      echo "✗ 비밀/환경 파일은 커밋 금지: $f"; fail=1 ;;
+  esac
+done <<< "$staged"
+
+js=$(printf '%s\n' "$staged" | grep -E '\.(ts|tsx|js|jsx)$' || true)
+java=$(printf '%s\n' "$staged" | grep -E '\.java$' || true)
+
+# 2) 디버그 출력 차단
+for f in $js; do
+  [ -f "$f" ] || continue
+  if grep -nE 'console\.(log|debug)' "$f" >/dev/null 2>&1; then
+    echo "✗ console.log/debug 제거 필요: $f"; fail=1
+  fi
+done
+for f in $java; do
+  [ -f "$f" ] || continue
+  if grep -nE 'System\.(out|err)\.print' "$f" >/dev/null 2>&1; then
+    echo "✗ System.out/err.print 제거 필요: $f"; fail=1
+  fi
+done
+
+# 3) 포맷 검사
+if [ -n "$js" ] && [ -x frontend/node_modules/.bin/prettier ]; then
+  if ! frontend/node_modules/.bin/prettier --check $js >/dev/null 2>&1; then
+    echo "✗ prettier 포맷 불일치 → 'cd frontend && npm run format' 후 재커밋"; fail=1
+  fi
+fi
+if [ -n "$java" ] && [ -x backend/gradlew ]; then
+  echo "· Java 포맷 검사(spotlessCheck)…"
+  if ! ( cd backend && ./gradlew --quiet spotlessCheck ) >/dev/null 2>&1; then
+    echo "✗ spotless 포맷 불일치 → 'cd backend && ./gradlew spotlessApply' 후 재커밋"; fail=1
+  fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "커밋이 차단되었습니다. 위 항목을 고친 뒤 다시 시도하세요."
+  exit 1
+fi
+exit 0

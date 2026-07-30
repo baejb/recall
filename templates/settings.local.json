@@ -1,0 +1,6 @@
+{
+  "//": "복사 위치: .claude/settings.local.json (개인 권한 오버라이드 — 공유 settings.json 을 덮어씀, gitignore 됨)",
+  "permissions": {
+    "allow": []
+  }
+}

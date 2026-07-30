@@ -1,0 +1,4 @@
+# 셸 스크립트/훅은 LF 개행 강제 (Windows 에서 CRLF 로 커밋되면 bash 실행 실패)
+*.sh   text eol=lf
+.githooks/*  text eol=lf
+gradlew  text eol=lf
