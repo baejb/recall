@@ -10,8 +10,8 @@ nginx는 **호스트에서** 구동한다(개발용 Docker Compose는 DB만 띄�
 1. 빌드된 프론트 SPA(`frontend/dist`) **정적 서빙** + SPA fallback(`try_files … /index.html`).
 2. `/api` → 백엔드(`:8080`) **프록시**로 프론트/백엔드를 **동일 오리진**으로 묶는다(브라우저 CORS 제거).
 
-> 기준 설정 파일은 현재 `frontend/nginx.conf`에 있다. 배포 정리 시 이 디렉터리(`nginx/`)로
-> 옮기는 것을 검토한다(지금은 위치만 인지).
+> 기준 설정 파일은 `nginx/nginx.conf`. 배포 시 `root` 를 프론트 빌드 산출물(`frontend/dist`)로
+> 맞춘다.
 
 ## 필수 규칙
 

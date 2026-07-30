@@ -24,9 +24,13 @@ cd frontend && npm install && npm run dev # http://localhost:3000
 
 ## 구조
 
-- `backend/` — Spring Boot 모듈러 모놀리스 (모듈 경계·아키텍처 → `docs/architecture.md`)
-- `frontend/` — React + Vite SPA
-- `nginx/` — 리버스 프록시 (호스트 구동)
+지금은 **실행되는 최소 골격**이다(기능 미구현). 도메인 모듈은 기능 구현 단계에서 추가한다 —
+목표 아키텍처·모듈 경계는 `docs/architecture.md`.
+
+- `backend/` — Spring Boot 최소 골격 (부팅 · DB/pgvector 연결 · `GET /api/health`)
+- `frontend/` — React + Vite SPA (백엔드 연결 확인 화면)
+- `nginx/` — 리버스 프록시 (호스트 구동, 정적 서빙 + `/api` 프록시, SSE 통과)
 - `docs/` — 설계 문서 (PRD·아키텍처·셋업·훅)
 
+실행 확인: 백엔드 기동 후 `curl http://localhost:8080/api/health` → `{"status":"ok",...}`.
 문서 지도·온보딩은 `docs/setup.md` 먼저 읽기.
