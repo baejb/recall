@@ -69,22 +69,25 @@
 
 ```
 com.recall
-├─ common/    예외·전역핸들러·audit·설정·MemoryType enum
+├─ common/    예외·전역핸들러·audit·설정·MemoryType·TypeStrategy·StrategyRegistry
 ├─ llm/       LlmClient·EmbeddingClient 포트 + 어댑터        [포트 — 유일하게 인터페이스]
 ├─ capture/   원문 저장(sync anchor) + M0 마스킹
 ├─ store/     저장 파이프라인(@Async): S2·S3·S4 오케스트레이션
-│   └─ spi/   ExtractionStrategy · SimilarityJudgeStrategy    ← 유형별 확장점
 ├─ query/     조회 파이프라인(SSE): C·P·R·W·RR·A
-│   └─ spi/   AnswerContribution · PlanContribution           ← 유형별 확장점
 ├─ search/    하이브리드 채널(exact·bm25·vector)·RRF·Weighted·Rerank
-│   └─ spi/   SearchRepresentation                            ← 유형별 임베딩/채널
 ├─ review/    검토 게이트·승인/반려
 └─ memory/    Memory 엔티티·저장·상태전이·임베딩 인덱스
-    └─ type/
-        ├─ knowledge/        (담당: 지식)
-        └─ troubleshooting/  (담당: 트러블슈팅)
+    └─ type/  유형별 전략 계약(SPI)과 구현을 한 곳에 모은다
+        ├─ ExtractionStrategy · SimilarityJudgeStrategy · SearchRepresentation
+        │       · PlanContribution · AnswerContribution   ← 계약(파이프라인이 호출)
+        ├─ knowledge/        (담당: 지식 — 위 계약 구현)
+        └─ troubleshooting/  (담당: 트러블슈팅 — 위 계약 구현)
 ```
 
+- **유형별 전략 계약(SPI)은 `memory/type/`에 모은다** — 파이프라인 단계(store/query/search)가
+  이 계약을 **호출**하고, 유형 패키지(knowledge/troubleshooting)가 **구현**한다. 계약과 구현을 한
+  곳에 두어 "새 유형이 무엇을 구현해야 하는지"를 한눈에 본다. 의존 방향: `store/query/search →
+  memory/type`(계약), `memory/type/knowledge → memory/type`(구현) — 순환 없음.
 - **계층**: `controller → service → repository`. 역방향/횡단 호출 금지. 도메인 서비스는 웹/영속
   세부를 모른다.
 - **패키지 = 모듈 경계**. 모듈 간은 public 서비스로만. 순환 의존 금지.
