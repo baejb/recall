@@ -28,6 +28,24 @@
   - *삭제 대신 상태 보존* — 레코드 삭제 대신 status 전이. 충돌은 자동 덮어쓰기 금지.
   - *결정론 단계에 LLM 금지* — 플래너/검색/가중치는 결정적으로. LLM은 분류·추출·판정·리랭크·답변만.
 
+## 아키텍처 · 확장 규칙
+
+> 패턴은 **실용 계층형 모듈러 모놀리스 + LLM/임베딩 경계에만 경량 헥사고날**. 선택 이유·판단
+> 기준·모듈 경계·분담은 `docs/architecture.md`. 여기선 **강제 규칙**만 둔다.
+
+- **포트는 "교체가 실제로 필요한 경계"에만** — `LlmClient`·`EmbeddingClient`만 인터페이스로 열고
+  주입한다. 그 외(memory·review·search·capture 등)는 구체 클래스 + JPA. `XxxService`에
+  `XxxServiceImpl` 껍데기를 만들지 않는다(YAGNI).
+- **유형(type) 변동은 전략 SPI로만** — 파이프라인 단계별 유형 차이는 `Map<MemoryType, XxxStrategy>`
+  (자가 등록 `supports(): MemoryType`)로 주입한다. **공유 코드에 `switch(MemoryType)` 금지**(새 유형
+  마다 switch를 고치게 되면 OCP 붕괴).
+- **SPI는 진짜 변동 축에** — 추출(S2)·검색표현(R)·판정(S4)은 유형축. **답변(A)은 유형×intent** 라
+  공유 Composer가 intent를 처리하고 유형 전략은 근거·필드만 기여한다(순수 per-type 포매터 금지).
+- **선택적 단계는 plan 플래그로** — `if(type==…)` 분기 대신 plan(`use_reranker`·`raw_search_required`
+  등)이 단계를 켜고 끈다.
+- **임베딩은 제네릭 키 테이블** `memory_embedding(kind, vector)` — 유형별 벡터 컬럼을 `memory`에 박지
+  않는다(새 표현 = 스키마 변경이 아니라 행 추가).
+
 ## 데이터 / 스키마
 
 - **스키마 변경은 Flyway 새 마이그레이션(`src/main/resources/db/migration/V__*.sql`)으로만.**
@@ -86,7 +104,17 @@
 - 입력 검증은 **경계**(컨트롤러 DTO `@Valid`)에서. 도메인 내부는 검증됐다고 가정.
 - **매직넘버 금지.** 임계값·가중치(`τ_conf`·`τ_recall`·`τ_sim`·`τ_ans`·채널 가중치·boost/penalty)는
   하드코딩하지 않고 **상수 또는 `@ConfigurationProperties`** 로 뺀다. 값의 근거는 라벨셋 fit
-  (PRD 부록 A) — 바꾸면 커밋/Decision Log에 근거를 남긴다.
+  (PRD 품질 기준·Eval 계획) — 바꾸면 커밋/Decision Log에 근거를 남긴다.
+
+### 테스트 (TDD 우선)
+
+- **테스트부터 쓴다(red → green → refactor).** 새 PRD 파이프라인 단계·버그 수정은 실패하는
+  테스트를 먼저 만들고 통과시킨다. 구현 뒤에 테스트를 끼워 맞추지 않는다.
+- **단계 성격에 맞게 검증한다**: 결정론 단계(M0·P·R·W)는 순수 함수 단위테스트(같은 입력=같은
+  출력), 확률적 단계(C·RR·A·S2·S3·S4)는 PRD Eval 케이스(허용 범위 판정)로 건다.
+- **🔴 치명 케이스는 회귀 테스트 필수** — 마스킹 유출·충돌 자동 덮어쓰기·근거 없는 생성은
+  케이스를 항상 유지하고 병합 게이트로 막는다.
+- 실행·작성 세부는 `test` 스킬을 따른다.
 
 ### 테스트 용이성 · 스타일
 

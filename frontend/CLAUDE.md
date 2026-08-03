@@ -15,6 +15,7 @@ npm install
 npm run dev        # :3000
 npm run build      # tsc --noEmit(타입체크) → vite build → dist/
 npm run preview    # 빌드 결과 확인
+npm run lint       # eslint 정적 분석 (자동수정: npm run lint:fix)
 ```
 
 ## 규칙
@@ -72,6 +73,8 @@ npm run preview    # 빌드 결과 확인
 - **렌더는 순수하게.** 부수효과는 이벤트 핸들러/이펙트에서만.
 - 컴포넌트 `PascalCase`, 훅 `useX`, 파일 1개 = 컴포넌트 1개 지향. 매직 문자열/숫자는 상수화.
 - **비밀 반입 금지**(번들은 공개물). 포맷은 **prettier**가 강제 — 손으로 맞추지 말고 `npm run format`.
+- **정적 분석은 eslint가 강제** — `npm run lint`(자동수정 `npm run lint:fix`). 역할 분리: **eslint=규칙
+  검사**(타입 우회·훅 규칙 등), **prettier=포맷**. lint 경고를 남긴 채 커밋하지 않는다.
 - **무분별한 패키지 추가 금지** — 의존성은 비용이다(번들·보안·유지보수).
 
 ## 배포 (추후)

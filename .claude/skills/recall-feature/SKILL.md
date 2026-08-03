@@ -17,7 +17,7 @@ Recall의 기능은 "무엇이 일어나야 하는가(결정론)"가 아니라 *
 
 ## 0. 먼저 읽는다
 
-1. **Recall AI PRD** (`docs/recall_ai_prd_v3.md` 또는 프로젝트가 지정한 위치). 특히 해당 기능이
+1. **Recall AI PRD** (`docs/recall_ai_prd.md`). 특히 해당 기능이
    속한 단계의 §. 없으면 사용자에게 PRD 위치를 묻는다 — PRD 없이 기능을 지어내지 않는다.
 2. 루트 `CLAUDE.md`의 **불변 원칙**과, 작업 영역(`backend`/`frontend`/`nginx`)의 CLAUDE.md.
 
