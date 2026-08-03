@@ -24,7 +24,9 @@ cd frontend && npm install && npm run dev # http://localhost:3000
 
 ## 구조
 
-```
-backend/    Spring Boot (capture · intent · extraction · typerouter · review · memory · search)
-frontend/   React + Vite SPA
-```
+- `backend/` — Spring Boot 모듈러 모놀리스 (모듈 경계·아키텍처 → `docs/architecture.md`)
+- `frontend/` — React + Vite SPA
+- `nginx/` — 리버스 프록시 (호스트 구동)
+- `docs/` — 설계 문서 (PRD·아키텍처·셋업·훅)
+
+문서 지도·온보딩은 `docs/setup.md` 먼저 읽기.

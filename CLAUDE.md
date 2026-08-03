@@ -61,15 +61,18 @@ cd frontend && npm install && npm run dev  # http://localhost:3000  (vite가 /ap
 
 ```
 recall/
-├── CLAUDE.md              ← (이 파일) 루트 규칙 · 불변 원칙
+├── CLAUDE.md              ← (이 파일) 루트 규칙 · 불변 원칙 · 커밋 규칙
 ├── frontend/CLAUDE.md     ← React/Vite/TS 규칙
-├── backend/CLAUDE.md      ← Spring Boot/Java 규칙
+├── backend/CLAUDE.md      ← Spring Boot/Java 규칙 · 아키텍처 규칙
 ├── nginx/CLAUDE.md        ← 리버스 프록시 규칙
-├── .claude/skills/        ← 프로젝트 전용 스킬
+├── .claude/               ← settings.json(권한·훅) · skills/ · hooks/
+├── docs/                  ← 설계 문서 (recall_ai_prd · architecture · setup · hooks · development_v1)
 ├── frontend/              ← SPA (Vite)
 ├── backend/               ← Spring Boot 모듈러 모놀리스 (com.recall.*)
 └── docker-compose.yml     ← 개발용 DB(pgvector)
 ```
+
+> 온보딩·문서 지도·Decision Log는 `docs/setup.md` 먼저 읽기.
 
 **CLAUDE.md 상속**: 하위 디렉터리 작업 시 **루트 + 해당 디렉터리 CLAUDE.md**가 함께 적용된다.
 하위 파일은 루트를 덮어쓰지 않고 **좁힌다**(더 구체적인 규칙만 추가).

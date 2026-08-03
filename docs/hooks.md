@@ -1,4 +1,4 @@
-# HOOKS-GUIDE.md — 훅 가이드
+# 훅 가이드
 
 두 종류의 훅이 있다. **Claude Code 훅**(편집 시 자동 포맷)과 **git 훅**(커밋 강제 검사).
 
@@ -25,7 +25,8 @@ bash scripts/setup-hooks.sh   # git config core.hooksPath=.githooks
 
 스테이지된 파일에 대해 검사하고, 하나라도 걸리면 **커밋을 막는다**.
 
-1. **비밀/환경 파일 차단**: `.env*`, `*.p12`, `*.jks`, `*.pem`, `*.key` 는 커밋 불가.
+1. **비밀/환경 파일 차단**: `.env`·`.env.*`, `*.p12`, `*.jks`, `*.pem`, `*.key` 는 커밋 불가.
+   (단 `.env.example`·`.env.sample`·`.env.template` 템플릿은 허용 — 비밀이 없으므로.)
 2. **디버그 출력 차단**: 프론트 `console.log/debug`, 백엔드 `System.out/err.print`.
 3. **포맷 검사**:
    - 프론트 스테이지 파일 → `prettier --check`. 불일치 시 `cd frontend && npm run format`.
