@@ -8,6 +8,15 @@ Thumbs.db
 # Env / secrets
 .env
 .env.local
+*.p12
+*.jks
+*.pem
+*.key
+
+# Claude Code — 개인 로컬 설정 (팀 공유 아님)
+# 루트로만 한정: templates/ 아래 예시 파일은 커밋되어야 한다
+/CLAUDE.local.md
+/.claude/settings.local.json
 
 # Java / Gradle
 backend/.gradle/
