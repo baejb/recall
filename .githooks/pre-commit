@@ -11,6 +11,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACM || true)
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   case "$f" in
+    .env.example|.env.sample|.env.template) ;;   # 템플릿(비밀 없음)은 허용
     .env|.env.*|*.p12|*.jks|*.pem|*.key)
       echo "✗ 비밀/환경 파일은 커밋 금지: $f"; fail=1 ;;
   esac
