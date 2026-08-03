@@ -61,7 +61,7 @@ public class StorePipeline {
         Map<String, Object> structured = extractions.get(type).extract(event.maskedText()); // S2
         Judgement judgement = judges.get(type).judge(structured, Map.of()); // S4
 
-        ReviewItem item = new ReviewItem(capture, judgement.verdict(), toJson(structured));
+        ReviewItem item = new ReviewItem(capture, type, judgement.verdict(), toJson(structured));
         reviewRepository.save(item);
         log.info(
                 "검토 대기함 등록: capture={} type={} verdict={}",

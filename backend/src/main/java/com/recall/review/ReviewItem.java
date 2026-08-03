@@ -1,6 +1,7 @@
 package com.recall.review;
 
 import com.recall.capture.Capture;
+import com.recall.common.MemoryType;
 import com.recall.memory.Memory;
 import com.recall.memory.type.Verdict;
 import jakarta.persistence.Column;
@@ -37,6 +38,11 @@ public class ReviewItem {
     @JoinColumn(name = "memory_id")
     private Memory memory;
 
+    /** 승인 시 만들 memory의 유형(저장 파이프라인의 분류 결과). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "memory_type")
+    private MemoryType type;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "judgement", nullable = false)
     private Verdict judgement;
@@ -63,8 +69,9 @@ public class ReviewItem {
     /** JPA 전용 기본 생성자. */
     protected ReviewItem() {}
 
-    public ReviewItem(Capture capture, Verdict judgement, String proposed) {
+    public ReviewItem(Capture capture, MemoryType type, Verdict judgement, String proposed) {
         this.capture = capture;
+        this.type = type;
         this.judgement = judgement;
         this.proposed = proposed;
     }
@@ -85,6 +92,10 @@ public class ReviewItem {
 
     public Memory getMemory() {
         return memory;
+    }
+
+    public MemoryType getType() {
+        return type;
     }
 
     public Verdict getJudgement() {
