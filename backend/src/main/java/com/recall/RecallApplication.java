@@ -2,18 +2,13 @@ package com.recall;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
- * Recall — single-user, self-hosted personal memory system.
+ * Recall — 단일 사용자 셀프호스트 개인 기억 시스템.
  *
- * <p>Modular monolith (Memory Core). Store path runs as async jobs; query path is
- * synchronous SSE. Nothing reaches {@code memory} without passing the review gate.
+ * <p>지금은 "실행되는 최소 골격"이다. 도메인 모듈(capture/search/review/…)은 기능 구현 시 추가한다.
  */
 @SpringBootApplication
-@ConfigurationPropertiesScan
-@EnableAsync
 public class RecallApplication {
 
     public static void main(String[] args) {
