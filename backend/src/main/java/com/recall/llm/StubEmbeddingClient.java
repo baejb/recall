@@ -2,15 +2,11 @@ package com.recall.llm;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 /**
- * Phase 0 walking skeleton용 임베딩 stub. 실제 구현이 없을 때만 활성화된다. 0으로 채운 고정 차원 벡터를 반환하되 stub 관여를 로그로
- * 남긴다(조용한 실패 금지).
+ * Phase 0 walking skeleton용 임베딩 stub. 실제 어댑터가 없을 때 {@link LlmConfig}가 기본 빈으로 등록한다. 0으로 채운 고정 차원 벡터를
+ * 반환하되 stub 관여를 로그로 남긴다(조용한 실패 금지).
  */
-@Component
-@ConditionalOnMissingBean(EmbeddingClient.class)
 public class StubEmbeddingClient implements EmbeddingClient {
 
     private static final Logger log = LoggerFactory.getLogger(StubEmbeddingClient.class);
