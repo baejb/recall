@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.recall.common.MemoryType;
+import com.recall.common.PromptLoader;
 import com.recall.llm.LlmClient;
 import java.util.List;
 import java.util.Map;
@@ -16,10 +17,10 @@ import org.junit.jupiter.api.Test;
  */
 class KnowledgeExtractionTest {
 
-    /** 주어진 문자열을 그대로 반환하는 fake LLM 포트로 추출기를 만든다. */
+    /** 주어진 문자열을 그대로 반환하는 fake LLM 포트로 추출기를 만든다(프롬프트는 실제 리소스 로드). */
     private KnowledgeExtraction withLlmResponse(String response) {
         LlmClient fake = (system, user) -> response;
-        return new KnowledgeExtraction(fake);
+        return new KnowledgeExtraction(fake, new PromptLoader());
     }
 
     @Test

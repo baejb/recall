@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
+import com.recall.common.PromptLoader;
 import com.recall.llm.LlmClient;
 import com.recall.memory.type.ExtractionStrategy;
 import java.util.List;
@@ -31,28 +32,19 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     /** LLM 응답 파싱 실패 로그에 남길 원문 미리보기 최대 길이. */
     private static final int PREVIEW_MAX = 120;
 
-    private static final String SYSTEM_PROMPT =
-            """
-            너는 개발자의 메모에서 '지식 카드'를 뽑아내는 추출기다.
-            입력 텍스트를 분석해 아래 JSON 스키마로만 응답하라. JSON 외 다른 텍스트는 절대 출력하지 마라.
-            {
-              "title":    "한 줄 제목(핵심 주제)",
-              "summary":  "2~3문장 요약",
-              "keywords": ["핵심 키워드", ...],
-              "facts":    ["검증 가능한 사실 진술", ...],
-              "document": "정리된 본문(원문의 지식을 재구성)"
-            }
-            사실이 아닌 것을 지어내지 말고, 근거가 없으면 해당 배열은 비워라.
-            """;
+    /** S2 추출 시스템 프롬프트 리소스 경로(코드가 아니라 콘텐츠라 파일로 분리). */
+    private static final String PROMPT_PATH = "prompts/knowledge-extraction.md";
 
     private final LlmClient llmClient;
+    private final String systemPrompt;
 
     // 이 앱은 주입 가능한 ObjectMapper 빈이 없어 코드베이스 관례대로 내부에서 생성한다(StorePipeline·ReviewService와 동일).
     private final ObjectMapper objectMapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    public KnowledgeExtraction(LlmClient llmClient) {
+    public KnowledgeExtraction(LlmClient llmClient, PromptLoader promptLoader) {
         this.llmClient = llmClient;
+        this.systemPrompt = promptLoader.load(PROMPT_PATH);
     }
 
     @Override
@@ -69,7 +61,7 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     private KnowledgeCard extractCard(String maskedText) {
         String raw;
         try {
-            raw = llmClient.complete(SYSTEM_PROMPT, maskedText);
+            raw = llmClient.complete(systemPrompt, maskedText);
         } catch (RuntimeException e) {
             log.warn("LLM 추출 호출 실패 → fallback: {}", e.getMessage());
             return fallback(maskedText);
