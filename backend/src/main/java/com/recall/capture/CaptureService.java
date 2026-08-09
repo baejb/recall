@@ -1,46 +1,54 @@
 package com.recall.capture;
 
-import com.recall.extraction.ExtractionService;
-import com.recall.intent.IntentRouter;
-import com.recall.intent.IntentType;
+import com.recall.capture.dto.CaptureRequest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Store-path entry point: mask → persist original → (if a store intent) kick off async
- * extraction. Nothing is written to memory here — that only happens after review approval.
- */
+/** 원문 저장 서비스. 마스킹 우선 → 원문(근거) 커밋(유실 금지 앵커) → 저장 방송. */
 @Service
 public class CaptureService {
 
-    private final MaskingService maskingService;
-    private final CaptureRepository captureRepository;
-    private final IntentRouter intentRouter;
-    private final ExtractionService extractionService;
+    private static final String DEFAULT_SOURCE_TYPE = "chat";
 
-    public CaptureService(MaskingService maskingService,
-                          CaptureRepository captureRepository,
-                          IntentRouter intentRouter,
-                          ExtractionService extractionService) {
-        this.maskingService = maskingService;
+    private final CaptureRepository captureRepository;
+    private final MaskingService maskingService;
+    private final ApplicationEventPublisher events;
+    private final TransactionTemplate tx;
+
+    public CaptureService(
+            CaptureRepository captureRepository,
+            MaskingService maskingService,
+            ApplicationEventPublisher events,
+            PlatformTransactionManager txManager) {
         this.captureRepository = captureRepository;
-        this.intentRouter = intentRouter;
-        this.extractionService = extractionService;
+        this.maskingService = maskingService;
+        this.events = events;
+        this.tx = new TransactionTemplate(txManager);
     }
 
-    @Transactional
-    public Long capture(String text, String sourceType) {
-        // 1) mask BEFORE anything leaves the process
-        MaskingService.MaskResult masked = maskingService.mask(text);
+    public Long capture(CaptureRequest request) {
+        String sourceType =
+                request.sourceType() == null ? DEFAULT_SOURCE_TYPE : request.sourceType();
 
-        // 2) preserve the (masked) original as evidence
-        Capture saved = captureRepository.save(new Capture(sourceType, masked.masked()));
+        // 마스킹 우선(불변 원칙): DB를 건드리지 않는 결정론 단계라 트랜잭션 밖에서 처리해 커넥션 점유를 줄인다.
+        MaskingService.MaskResult masked = maskingService.mask(request.rawText());
 
-        // 3) classify + hand off to the async extraction job
-        IntentType intent = intentRouter.classify(masked.masked());
-        if (intent == IntentType.STORE) {
-            extractionService.extract(saved.getId());
-        }
-        return saved.getId();
+        // 트랜잭션은 원문 커밋(유실 금지 앵커) + 방송에만 건다.
+        // 방송을 트랜잭션 안에서 하는 이유: store 리스너가 AFTER_COMMIT로 걸려 있어, 커밋이 확정된 뒤에만 이후 처리가 돈다.
+        return tx.execute(
+                status -> {
+                    Capture saved =
+                            captureRepository.save(
+                                    new Capture(
+                                            sourceType,
+                                            masked.maskedText(),
+                                            masked.maskedSpansJson()));
+                    // 이후 처리(추출·판정·검토대기함)는 store 모듈이 이 방송을 구독해 맡는다(모듈 순환 차단).
+                    events.publishEvent(
+                            new CaptureCreatedEvent(saved.getId(), masked.maskedText()));
+                    return saved.getId();
+                });
     }
 }

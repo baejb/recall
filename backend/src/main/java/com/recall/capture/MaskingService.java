@@ -1,52 +1,21 @@
 package com.recall.capture;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 /**
- * Pattern-rule masking of secrets (API keys, tokens, passwords), applied BEFORE any
- * external LLM send. This is a non-negotiable rule in the design docs.
+ * M0 마스킹 — 원문이 저장·외부 LLM·인덱스·로그로 나가기 <b>전에</b> 민감정보를 가린다(불변 원칙: 마스킹 우선). 결정론 단계(정규식 패턴)라 LLM을 쓰지
+ * 않는다.
  *
- * <p>The original text is preserved elsewhere; here we only produce the masked text and
- * the span list so the user can later review/restore false positives.
+ * <p>Phase 0: stub(그대로 통과). Phase 1에서 API키·토큰·비밀번호 등 패턴 마스킹을 채운다.
  */
 @Service
 public class MaskingService {
 
-    public record Span(int start, int end, String type) {
-    }
+    /** 마스킹 결과: 가려진 텍스트 + 어디를 가렸는지(사용자 검토/복원용, JSON). */
+    public record MaskResult(String maskedText, String maskedSpansJson) {}
 
-    public record MaskResult(String masked, List<Span> spans) {
-    }
-
-    private record Rule(String type, Pattern pattern) {
-    }
-
-    // Intentionally conservative starter rules. TODO: expand + make configurable.
-    private static final List<Rule> RULES = List.of(
-            new Rule("API_KEY", Pattern.compile("\\b(?:sk|pk)-[A-Za-z0-9]{8,}\\b")),
-            new Rule("BEARER_TOKEN", Pattern.compile("(?i)bearer\\s+[A-Za-z0-9._-]{10,}")),
-            new Rule("AWS_ACCESS_KEY", Pattern.compile("\\bAKIA[0-9A-Z]{16}\\b")),
-            new Rule("PASSWORD_ASSIGN", Pattern.compile("(?i)(password|passwd|pwd)\\s*[=:]\\s*\\S+"))
-    );
-
-    public MaskResult mask(String input) {
-        String masked = input;
-        List<Span> spans = new ArrayList<>();
-        for (Rule rule : RULES) {
-            Matcher m = rule.pattern().matcher(masked);
-            StringBuilder sb = new StringBuilder();
-            while (m.find()) {
-                String replacement = "[MASKED_" + rule.type() + "]";
-                spans.add(new Span(m.start(), m.start() + replacement.length(), rule.type()));
-                m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
-            }
-            m.appendTail(sb);
-            masked = sb.toString();
-        }
-        return new MaskResult(masked, spans);
+    public MaskResult mask(String rawText) {
+        // TODO(Phase 1): 정규식으로 민감정보 탐지·치환 + 스팬 기록.
+        return new MaskResult(rawText, "[]");
     }
 }

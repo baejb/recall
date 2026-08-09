@@ -2,11 +2,5 @@ package com.recall.capture.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record CaptureRequest(
-        @NotBlank String text,
-        String sourceType
-) {
-    public String sourceTypeOrDefault() {
-        return sourceType == null || sourceType.isBlank() ? "chat" : sourceType;
-    }
-}
+/** 원문 저장 요청. sourceType 생략 시 chat 취급. */
+public record CaptureRequest(String sourceType, @NotBlank String rawText) {}

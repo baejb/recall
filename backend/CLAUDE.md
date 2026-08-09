@@ -121,6 +121,8 @@
 - **결정론 단계는 순수 함수처럼**(부작용·랜덤·시계 의존 최소) 짜서 같은 입력=같은 출력으로
   테스트·재현 가능하게. 시간/랜덤/외부 호출이 필요하면 주입(`Clock` 등)한다.
 - 메서드는 작게, 한 가지 일. 깊은 중첩보다 **early return**.
+- **import는 파일 상단에 선언한다.** 코드 본문에서 FQN(`java.util.Set`, `java.util.Collections` 등)을
+  직접 쓰지 않는다(가독성·spotless 정합).
 - 로깅은 **slf4j**. `System.out/err.print` 금지(pre-commit이 차단).
 - 포맷은 **spotless(google-java-format AOSP)** 가 강제 — 손으로 맞추지 말고 `./gradlew spotlessApply`.
 

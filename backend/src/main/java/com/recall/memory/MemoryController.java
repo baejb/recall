@@ -1,12 +1,12 @@
 package com.recall.memory;
 
+import com.recall.memory.dto.MemoryResponse;
 import java.util.List;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** memory 조회 입구. */
 @RestController
 @RequestMapping("/api/memories")
 public class MemoryController {
@@ -17,15 +17,9 @@ public class MemoryController {
         this.memoryService = memoryService;
     }
 
+    /** 활성 카드 목록. */
     @GetMapping
-    public List<Memory> recent() {
-        return memoryService.recent();
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Memory> byId(@PathVariable Long id) {
-        return memoryService.find(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public List<MemoryResponse> list() {
+        return memoryService.listActive();
     }
 }

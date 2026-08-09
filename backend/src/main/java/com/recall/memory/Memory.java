@@ -1,20 +1,25 @@
 package com.recall.memory;
 
+import com.recall.capture.Capture;
+import com.recall.common.MemoryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
-/**
- * A structured, approved record. Troubleshooting vs knowledge details live in the
- * {@code structured} jsonb column (not mapped here yet). Embedding / tsvector columns
- * exist in the schema but are populated by native queries, not JPA.
- */
+/** memory 테이블에 대응 — 승인된 구조화 카드. 원문 1개에 여러 개(1:N). */
 @Entity
 @Table(name = "memory")
 public class Memory {
@@ -23,41 +28,63 @@ public class Memory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 이 카드가 나온 원문. 여러 memory가 한 capture를 가리킴(1:N). */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "capture_id", nullable = false)
+    private Capture capture;
+
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "type", nullable = false)
     private MemoryType type;
 
-    @Column(nullable = false)
+    @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "project")
     private String project;
 
+    @Column(name = "component")
     private String component;
 
-    @Column(columnDefinition = "text")
+    @Column(name = "summary")
     private String summary;
 
-    @Column(nullable = false)
+    /** 유형별 필드(증상/원인/해결 또는 사실/문서)를 JSON 상자로. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "structured", nullable = false)
+    private String structured;
+
+    /** 삭제 대신 상태 전이(불변 원칙): active | superseded | incorrect. */
+    @Column(name = "status", nullable = false)
     private String status = "active";
 
-    private Float confidence;
+    @Column(name = "confidence")
+    private Double confidence;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private Instant createdAt;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 
-    @Column(name = "updated_at", insertable = false, updatable = false)
-    private Instant updatedAt;
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 
-    protected Memory() {
-    }
+    /** JPA 전용 기본 생성자. */
+    protected Memory() {}
 
-    public Memory(MemoryType type, String title) {
+    public Memory(Capture capture, MemoryType type, String title, String structured) {
+        this.capture = capture;
         this.type = type;
         this.title = title;
+        this.structured = structured;
     }
 
     public Long getId() {
         return id;
+    }
+
+    public Capture getCapture() {
+        return capture;
     }
 
     public MemoryType getType() {
@@ -72,47 +99,31 @@ public class Memory {
         return project;
     }
 
-    public void setProject(String project) {
-        this.project = project;
-    }
-
     public String getComponent() {
         return component;
-    }
-
-    public void setComponent(String component) {
-        this.component = component;
     }
 
     public String getSummary() {
         return summary;
     }
 
-    public void setSummary(String summary) {
-        this.summary = summary;
+    public String getStructured() {
+        return structured;
     }
 
     public String getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Float getConfidence() {
+    public Double getConfidence() {
         return confidence;
     }
 
-    public void setConfidence(Float confidence) {
-        this.confidence = confidence;
-    }
-
-    public Instant getCreatedAt() {
+    public OffsetDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public Instant getUpdatedAt() {
+    public OffsetDateTime getUpdatedAt() {
         return updatedAt;
     }
 }

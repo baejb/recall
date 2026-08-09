@@ -11,6 +11,30 @@
 
 ---
 
+## 용어 — 파이프라인 단계 약어
+
+이 문서와 코드에 나오는 단계 약어를 한 번에 편다(자세한 근거는 `docs/recall_ai_prd.md`). 약어를 그대로
+쓰되, 처음 보는 사람이 여기서 뜻을 찾을 수 있게 한다.
+
+| 약어 | 단계(뜻) | 성격 | 경로 |
+|------|----------|------|------|
+| M0 | 마스킹 — 민감정보 가리기 | 결정적 | 저장 |
+| S2 | 구조화 추출 — 대화 → 유형별 JSON | 확률적(LLM) | 저장 |
+| S3 | 긴맥락 Map-Reduce — 대용량 대화 필터·클러스터·병합 | 확률적(LLM) | 저장 |
+| S4 | 판정 — 재진입/중복/모순 판단 | 확률적(LLM) | 저장 |
+| C | 분류(Classify) — 질문 유형 판정 | 확률적(LLM) | 조회 |
+| P | 플래너(Plan) — 검색 계획·플래그 | 결정적 | 조회 |
+| R | 검색(Retrieve) — 채널별 후보 수집 | 결정적 | 조회 |
+| W | 가중치(Weight) — 채널 결과 결합 | 결정적 | 조회 |
+| RR | 리랭크(Rerank) — 상위 후보 재정렬 | 확률적(LLM) | 조회 |
+| A | 답변(Answer) — 근거 기반 답 생성 | 확률적(LLM) | 조회 |
+
+- 저장 경로: `M0 → S2 → S3 → S4`
+- 조회 경로: `C → P → R → W → RR → A`
+- 결정적(M0·P·R·W)은 재현·감사·비용 통제를 위해 LLM을 쓰지 않는다. LLM은 모호성이 본질인 단계에만.
+
+---
+
 ## 1. 아키텍처 패턴 — 왜 "실용 계층형 + 선택적 포트"인가
 
 ### 후보
@@ -69,22 +93,25 @@
 
 ```
 com.recall
-├─ common/    예외·전역핸들러·audit·설정·MemoryType enum
+├─ common/    예외·전역핸들러·audit·설정·MemoryType·TypeStrategy·StrategyRegistry
 ├─ llm/       LlmClient·EmbeddingClient 포트 + 어댑터        [포트 — 유일하게 인터페이스]
 ├─ capture/   원문 저장(sync anchor) + M0 마스킹
 ├─ store/     저장 파이프라인(@Async): S2·S3·S4 오케스트레이션
-│   └─ spi/   ExtractionStrategy · SimilarityJudgeStrategy    ← 유형별 확장점
 ├─ query/     조회 파이프라인(SSE): C·P·R·W·RR·A
-│   └─ spi/   AnswerContribution · PlanContribution           ← 유형별 확장점
 ├─ search/    하이브리드 채널(exact·bm25·vector)·RRF·Weighted·Rerank
-│   └─ spi/   SearchRepresentation                            ← 유형별 임베딩/채널
 ├─ review/    검토 게이트·승인/반려
 └─ memory/    Memory 엔티티·저장·상태전이·임베딩 인덱스
-    └─ type/
-        ├─ knowledge/        (담당: 지식)
-        └─ troubleshooting/  (담당: 트러블슈팅)
+    └─ type/  유형별 전략 계약(SPI)과 구현을 한 곳에 모은다
+        ├─ ExtractionStrategy · SimilarityJudgeStrategy · SearchRepresentation
+        │       · PlanContribution · AnswerContribution   ← 계약(파이프라인이 호출)
+        ├─ knowledge/        (담당: 지식 — 위 계약 구현)
+        └─ troubleshooting/  (담당: 트러블슈팅 — 위 계약 구현)
 ```
 
+- **유형별 전략 계약(SPI)은 `memory/type/`에 모은다** — 파이프라인 단계(store/query/search)가
+  이 계약을 **호출**하고, 유형 패키지(knowledge/troubleshooting)가 **구현**한다. 계약과 구현을 한
+  곳에 두어 "새 유형이 무엇을 구현해야 하는지"를 한눈에 본다. 의존 방향: `store/query/search →
+  memory/type`(계약), `memory/type/knowledge → memory/type`(구현) — 순환 없음.
 - **계층**: `controller → service → repository`. 역방향/횡단 호출 금지. 도메인 서비스는 웹/영속
   세부를 모른다.
 - **패키지 = 모듈 경계**. 모듈 간은 public 서비스로만. 순환 의존 금지.

@@ -26,11 +26,3 @@ management:
     web:
       exposure:
         include: health,info
-
-recall:
-  llm:
-    api-key: ${RECALL_LLM_API_KEY:}
-    base-url: ${RECALL_LLM_BASE_URL:https://api.anthropic.com}
-    model-strong: ${RECALL_LLM_MODEL_STRONG:claude-opus-4-8}
-    model-cheap: ${RECALL_LLM_MODEL_CHEAP:claude-haiku-4-5-20251001}
-    model-embed: ${RECALL_LLM_MODEL_EMBED:voyage-3}

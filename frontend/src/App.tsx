@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
 
 export default function App() {
-  const [pending, setPending] = useState<number | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/reviews/count')
+    fetch('/api/health')
       .then((r) => r.json())
-      .then((d) => setPending(d.pending))
-      .catch(() => setPending(null))
+      .then((d) => setStatus(d.status))
+      .catch(() => setStatus(null))
   }, [])
 
   return (
     <main>
       <h1>Recall</h1>
-      <p>개발자 개인 기억 시스템 — 초기 스캐폴드.</p>
+      <p>개발자 개인 기억 시스템 — 실행 골격.</p>
       <p className="muted">
-        검토 대기: {pending === null ? '백엔드 연결 안 됨' : `${pending}건`}
+        백엔드: {status === null ? '연결 안 됨' : `연결됨 (${status})`}
       </p>
     </main>
   )

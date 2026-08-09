@@ -6,12 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
-/**
- * The original pasted conversation/document, masked before extraction.
- * Kept as evidence and as the source for re-extraction; never fed to search indexes.
- */
+/** capture 테이블에 대응 — 마스킹된 원문(검색 대상이 아니라 근거로 보관). */
 @Entity
 @Table(name = "capture")
 public class Capture {
@@ -26,15 +26,21 @@ public class Capture {
     @Column(name = "raw_text", nullable = false)
     private String rawText;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private Instant createdAt;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "masked_spans", nullable = false)
+    private String maskedSpans;
 
-    protected Capture() {
-    }
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private OffsetDateTime createdAt;
 
-    public Capture(String sourceType, String rawText) {
+    /** JPA 전용 기본 생성자. */
+    protected Capture() {}
+
+    public Capture(String sourceType, String rawText, String maskedSpans) {
         this.sourceType = sourceType;
         this.rawText = rawText;
+        this.maskedSpans = maskedSpans;
     }
 
     public Long getId() {
@@ -49,7 +55,11 @@ public class Capture {
         return rawText;
     }
 
-    public Instant getCreatedAt() {
+    public String getMaskedSpans() {
+        return maskedSpans;
+    }
+
+    public OffsetDateTime getCreatedAt() {
         return createdAt;
     }
 }
