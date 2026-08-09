@@ -36,13 +36,13 @@ public class QueryPipeline {
     public List<AnswerFragment> answer(String question) {
         MemoryType type = classify(question); // C
         List<Memory> candidates = search(type); // P·R·W·RR
-        return candidates.stream()
-                .map(
-                        m ->
-                                new AnswerFragment(
-                                        answers.get(m.getType()).render(parse(m.getStructured())),
-                                        m.getId()))
-                .toList(); // A — 근거(memory id)와 함께
+        return candidates.stream().map(this::toFragment).toList(); // A — 근거(memory id)와 함께
+    }
+
+    /** memory 한 건을 유형별 답변 전략으로 렌더링해 근거(memory id)와 함께 조각으로 만든다. */
+    private AnswerFragment toFragment(Memory memory) {
+        String rendered = answers.get(memory.getType()).render(parse(memory.getStructured()));
+        return new AnswerFragment(rendered, memory.getId());
     }
 
     private MemoryType classify(String question) {

@@ -1,8 +1,10 @@
 package com.recall.common;
 
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 유형별 전략 목록을 {@code MemoryType -> 전략} 조회로 바꿔주는 레지스트리.
@@ -44,7 +46,7 @@ public final class StrategyRegistry<T extends TypeStrategy> {
     }
 
     /** 현재 전략이 등록된 유형 집합(부팅 시 커버리지 로깅·검증용). */
-    public java.util.Set<MemoryType> registered() {
-        return java.util.Collections.unmodifiableSet(byType.keySet());
+    public Set<MemoryType> registered() {
+        return Collections.unmodifiableSet(byType.keySet());
     }
 }
