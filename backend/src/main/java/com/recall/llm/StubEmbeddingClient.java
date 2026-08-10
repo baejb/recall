@@ -20,8 +20,17 @@ public class StubEmbeddingClient implements EmbeddingClient {
     }
 
     @Override
-    public float[] embed(String text) {
-        log.warn("[STUB] EmbeddingClient.embed 호출 — 실제 임베딩 미연동, 0벡터 반환");
+    public float[] embedDocument(String text) {
+        return zeros();
+    }
+
+    @Override
+    public float[] embedQuery(String text) {
+        return zeros();
+    }
+
+    private float[] zeros() {
+        log.warn("[STUB] EmbeddingClient 호출 — 실제 임베딩 미연동, 0벡터 반환(벡터 검색 무의미)");
         return new float[DIMENSION];
     }
 }
