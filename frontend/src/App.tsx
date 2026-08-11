@@ -1,22 +1,29 @@
-import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { Sidebar } from './components/Sidebar'
+import { QueryPage } from './pages/QueryPage'
+import { CapturePage } from './pages/CapturePage'
+import { ReviewListPage } from './pages/ReviewListPage'
+import { ReviewDetailPage } from './pages/ReviewDetailPage'
+import { MemoryListPage } from './pages/MemoryListPage'
+import { MemoryDetailPage } from './pages/MemoryDetailPage'
+import { SourcePage } from './pages/SourcePage'
 
 export default function App() {
-  const [status, setStatus] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then((d) => setStatus(d.status))
-      .catch(() => setStatus(null))
-  }, [])
-
   return (
-    <main>
-      <h1>Recall</h1>
-      <p>개발자 개인 기억 시스템 — 실행 골격.</p>
-      <p className="muted">
-        백엔드: {status === null ? '연결 안 됨' : `연결됨 (${status})`}
-      </p>
-    </main>
+    <div className="layout">
+      <Sidebar />
+      <main className="stage">
+        <Routes>
+          <Route path="/" element={<QueryPage />} />
+          <Route path="/capture" element={<CapturePage />} />
+          <Route path="/reviews" element={<ReviewListPage />} />
+          <Route path="/reviews/:id" element={<ReviewDetailPage />} />
+          <Route path="/memories" element={<MemoryListPage />} />
+          <Route path="/memories/:id" element={<MemoryDetailPage />} />
+          <Route path="/source/:captureId" element={<SourcePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+    </div>
   )
 }
