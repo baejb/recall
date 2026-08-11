@@ -1,84 +1,49 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { QueryScope } from '../types'
 import { useRecall } from '../hooks/useRecall'
-import { useToast } from '../hooks/useToast'
-import { matchReason, memSummary, searchMemories } from '../lib/search'
-import { StatusPill } from './StatusPill'
-import { TypeTag } from './TypeTag'
-import { RecurBadge } from './RecurBadge'
-import { RecurTimeline } from './RecurTimeline'
+import type { AnswerFragment } from '../api/dto'
+import { streamQuery } from '../api/client'
 
-const FLASH_MS = 1200
-
-/** 물어보기 결과 — 기억에서 찾으면 근거(citation)와 함께, 없으면 "기록 없음"으로 표시. */
-export function QueryResult({
-  question,
-  scope,
-  onBack,
-}: {
-  question: string
-  scope: QueryScope
-  onBack: () => void
-}) {
-  const { memories, getCapture, recordRecurFromQuery } = useRecall()
+/**
+ * 물어보기 결과 — POST /api/query 를 SSE로 스트리밍 소비한다.
+ * 답변은 저장된 근거(memoryId)에 매인다. 조각이 하나도 없으면 "기록 없음"으로 표시(근거 없는 생성 금지).
+ */
+export function QueryResult({ question, onBack }: { question: string; onBack: () => void }) {
+  const { memories } = useRecall()
   const navigate = useNavigate()
-  const toast = useToast()
-  const srcRef = useRef<HTMLDivElement>(null)
-  const [flash, setFlash] = useState(false)
+  const [fragments, setFragments] = useState<AnswerFragment[]>([])
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const hits = useMemo(() => searchMemories(memories, question, scope), [memories, question, scope])
+  // question별로 QueryPage가 key로 재마운트하므로 상태 리셋 불필요.
+  // 이펙트 본문에서 동기 setState를 피하려 setState는 스트림 콜백/후속에서만 호출한다.
+  useEffect(() => {
+    const ctrl = new AbortController()
+    streamQuery(question, (f) => setFragments((prev) => [...prev, f]), ctrl.signal)
+      .then(() => setDone(true))
+      .catch((e: unknown) => {
+        if (ctrl.signal.aborted) return // 언마운트/재질문에 의한 중단은 에러 아님
+        setError(e instanceof Error ? e.message : '답변을 받지 못했어요')
+        setDone(true)
+      })
+    return () => ctrl.abort()
+  }, [question])
 
-  const jumpToSource = () => {
-    srcRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setFlash(true)
-    window.setTimeout(() => setFlash(false), FLASH_MS)
-  }
+  const answer = useMemo(() => fragments.map((f) => f.text).join(''), [fragments])
 
-  if (!hits.length) {
-    return (
-      <section className="screen">
-        <button className="backbtn" onClick={onBack}>
-          ← 다시 묻기
-        </button>
-        <div className="miss-banner">
-          <span>🔍</span> 기억엔 없는 질문이에요. 지어내지 않고, 지금 새로 풀어드릴게요.
-        </div>
-        <div className="card pad">
-          <div className="between" style={{ marginBottom: 10 }}>
-            <span className="qtype">🆕 새 질문</span>
-            <span className="eyebrow">저장된 기억 아님</span>
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{question}</div>
-          <p style={{ margin: '0 0 8px', fontSize: 14.5, color: 'var(--text-muted)' }}>
-            (LLM이 새로 생성한 답변이 여기 표시돼요. 이건 저장된 기억이 아니에요.)
-          </p>
-          <hr className="divider" />
-          <div className="between">
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              이 답변, 기억으로 저장할까요?
-            </span>
-            <button className="btn primary" onClick={() => navigate('/capture')}>
-              💾 저장하러 가기 →
-            </button>
-          </div>
-        </div>
-        <div className="note">
-          <b>설계</b>
-          <span>
-            "없음"이 막다른 길이 아니라 새 지식이 됨 — 새로 풀고 → 저장 제안 → 다음엔 기억함.
-          </span>
-        </div>
-      </section>
-    )
-  }
+  // 근거: 조각이 참조한 memoryId(중복 제거). 저장된 기억에서 제목을 찾아 링크.
+  const citations = useMemo(() => {
+    const ids: number[] = []
+    for (const f of fragments) {
+      if (f.memoryId != null && !ids.includes(f.memoryId)) ids.push(f.memoryId)
+    }
+    return ids.map((mid) => ({
+      id: mid,
+      title: memories.find((m) => m.id === String(mid))?.title ?? `기억 #${mid}`,
+    }))
+  }, [fragments, memories])
 
-  const top = hits[0]
-  const reason = matchReason(top, question)
-  const isRecur = (top.hits || 1) > 1
-  const qlabel = top.type === 'ts' ? '🔧 트러블슈팅 · 해결 회상형' : '📘 지식 · 개념 질문'
-  const cap = getCapture(top.captureId)
-  const related = hits.slice(1, 4)
+  const isEmpty = done && !error && answer.trim().length === 0
 
   return (
     <section className="screen">
@@ -86,149 +51,65 @@ export function QueryResult({
         ← 다시 묻기
       </button>
 
-      {isRecur ? (
-        <div className="recur-banner">
-          <span>🔁</span>
-          <span>
-            이거, 예전에도 겪었어요 — <b>{top.hits}번째</b> 마주침이에요. 지난 {top.lastSeen}에
-            이렇게 풀었어요.
-          </span>
+      {error ? (
+        <div className="miss-banner">
+          <span>⚠️</span> 답변 중 문제가 생겼어요: {error}
+        </div>
+      ) : isEmpty ? (
+        <div className="miss-banner">
+          <span>🔍</span> 기억엔 없는 질문이에요. 지어내지 않고 "기록 없음"으로 남겨요.
         </div>
       ) : (
         <div className="found-banner">
-          <span>🧠</span> 예전 기억에서 찾았어요.
+          <span>🧠</span> {done ? '내 기억에서 찾은 답이에요.' : '기억을 뒤지는 중…'}
         </div>
       )}
 
-      <div className="card pad">
-        <div className="between" style={{ marginBottom: 8 }}>
-          <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className="qtype">{qlabel}</span>
-            <span className={`matchreason ${reason.cls}`}>{reason.label}</span>
-          </span>
-          {top.type === 'ts' && <StatusPill status={top.ts.status} />}
-        </div>
-        <div style={{ fontWeight: 700, fontSize: 17 }}>{top.title}</div>
-
-        {isRecur && <RecurTimeline memory={top} />}
-
-        {top.type === 'ts' ? (
-          <div className="kv">
-            <div className="k">해결책</div>
-            <div className="v hi">
-              {top.ts.solution || top.ts.problem}{' '}
-              <button className="cite" onClick={jumpToSource}>
-                1
-              </button>
-            </div>
+      {!isEmpty && !error && (
+        <div className="card pad">
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>{question}</div>
+          <div className="v" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+            {answer}
+            {!done && <span className="cursor">▍</span>}
           </div>
-        ) : (
-          <div className="v" style={{ margin: '10px 0' }}>
-            {top.kn.content}{' '}
-            <button className="cite" onClick={jumpToSource}>
-              1
-            </button>
-          </div>
-        )}
 
-        <div className="between" style={{ marginTop: 2 }}>
-          <button className="btn ghost sm" onClick={() => navigate(`/memories/${top.id}`)}>
-            전체 맥락 보기 →
-          </button>
-          <div className="row">
-            <button
-              className="btn ghost sm"
-              onClick={() => {
-                recordRecurFromQuery(top.id)
-                toast('🔁 재발로 기록됨')
-              }}
-            >
-              🔁 또 겪었어요 (재발 기록)
-            </button>
-            <button
-              className="btn ghost sm"
-              onClick={() => toast('현재 맥락으로 새 답변 생성 (목업)')}
-            >
-              🆕 이 말고 새로 풀기
-            </button>
-          </div>
-        </div>
-
-        <hr className="divider" />
-        <h3
-          style={{
-            fontSize: 11.5,
-            color: 'var(--text-faint)',
-            fontFamily: 'var(--font-mono)',
-            margin: '0 0 4px',
-            textTransform: 'uppercase',
-            letterSpacing: '.08em',
-          }}
-        >
-          근거 (1)
-        </h3>
-        <div className={flash ? 'srcitem flash' : 'srcitem'} ref={srcRef}>
-          <div className="snum">1</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13.5 }}>{cap?.created} 대화</div>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{top.title} · 마스킹됨</div>
-          </div>
-          <button
-            className="evidence"
-            style={{ padding: '5px 9px' }}
-            onClick={() => navigate(`/source/${top.captureId}`)}
-          >
-            원본 보기
-          </button>
-        </div>
-
-        {related.length > 0 && (
-          <>
-            <hr className="divider" />
-            <h3
-              style={{
-                fontSize: 11.5,
-                color: 'var(--text-faint)',
-                fontFamily: 'var(--font-mono)',
-                margin: '0 0 8px',
-                textTransform: 'uppercase',
-                letterSpacing: '.08em',
-              }}
-            >
-              관련 기억 ({related.length})
-            </h3>
-            {related.map((x) => {
-              const rr = matchReason(x, question)
-              return (
+          {citations.length > 0 && (
+            <>
+              <hr className="divider" />
+              <h3
+                style={{
+                  fontSize: 11.5,
+                  color: 'var(--text-faint)',
+                  fontFamily: 'var(--font-mono)',
+                  margin: '0 0 8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '.08em',
+                }}
+              >
+                근거 ({citations.length})
+              </h3>
+              {citations.map((c, i) => (
                 <button
-                  key={x.id}
-                  className="listrow"
-                  style={{ marginBottom: 8 }}
-                  onClick={() => navigate(`/memories/${x.id}`)}
+                  key={c.id}
+                  className="srcitem"
+                  style={{ width: '100%', textAlign: 'left', marginBottom: 8 }}
+                  onClick={() => navigate(`/memories/${c.id}`)}
                 >
-                  <TypeTag type={x.type} />
-                  <div className="body">
-                    <div className="t" style={{ fontSize: 14 }}>
-                      {x.title}
-                    </div>
-                    <div className="s">{memSummary(x).slice(0, 54)}</div>
+                  <div className="snum">{i + 1}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{c.title}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>기억 보기 →</div>
                   </div>
-                  <span className={`matchreason ${rr.cls}`}>{rr.label}</span>
-                  <RecurBadge memory={x} />
-                  <span className="chev">›</span>
                 </button>
-              )
-            })}
-          </>
-        )}
-      </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="note">
         <b>설계</b>
-        <span>
-          같은 문제를 다시 물으면 <b>새로 풀지 않고</b> 예전 해결·근거를 회상 → "몇 번째 마주침"까지
-          보여줘 반복 실수를 드러냄. 근거 없는 답은 안 만듦.
-        </span>
+        <span>답변은 저장된 근거(memoryId)에 매여요. 근거가 없으면 지어내지 않고 "기록 없음".</span>
       </div>
     </section>
   )

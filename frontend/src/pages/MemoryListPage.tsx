@@ -7,7 +7,7 @@ import { StatusPill } from '../components/StatusPill'
 import { RecurBadge } from '../components/RecurBadge'
 
 export function MemoryListPage() {
-  const { memories } = useRecall()
+  const { memories, loading, error, refresh } = useRecall()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
 
@@ -50,8 +50,21 @@ export function MemoryListPage() {
         </span>
       </div>
 
-      {list.length === 0 ? (
-        <div className="card empty">검색 결과가 없어요.</div>
+      {error ? (
+        <div className="card empty">
+          <div className="big">⚠️</div>
+          <p style={{ fontWeight: 600, margin: '10px 0 2px' }}>불러오지 못했어요</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px' }}>{error}</p>
+          <button className="btn" onClick={() => void refresh()}>
+            다시 시도
+          </button>
+        </div>
+      ) : loading ? (
+        <div className="card pad">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="card empty">
+          {memories.length === 0 ? '아직 저장된 기억이 없어요.' : '검색 결과가 없어요.'}
+        </div>
       ) : (
         <div className="grid">
           {list.map((m) => {

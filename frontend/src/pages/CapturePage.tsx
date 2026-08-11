@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRecall } from '../hooks/useRecall'
 import { useToast } from '../hooks/useToast'
-import { detectSecrets, maskText, toSpans, type DetectedSecret } from '../lib/masking'
-import { mockExtract } from '../lib/extract'
+import { detectSecrets, maskText, type DetectedSecret } from '../lib/masking'
 import { Stepper } from '../components/Stepper'
 import { StepProgress } from '../components/StepProgress'
 
@@ -29,7 +28,7 @@ export function CapturePage() {
   const [step, setStep] = useState<Step>('input')
   const [text, setText] = useState(SAMPLE_TEXT)
   const [draft, setDraft] = useState<Draft | null>(null)
-  const { addCaptureFromDraft } = useRecall()
+  const { submitCapture } = useRecall()
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -39,15 +38,18 @@ export function CapturePage() {
     setStep('mask')
   }
 
-  const finishExtract = () => {
+  // StepProgress 애니메이션이 끝나면 실제로 서버에 저장한다. 서버가 마스킹·추출을 수행.
+  const finishExtract = async () => {
     if (!draft) return
-    const { reviewId } = addCaptureFromDraft(
-      draft.masked,
-      toSpans(draft.found),
-      mockExtract(draft.text)
-    )
-    toast('✓ 검토함에 1건 추가됨')
-    navigate(`/reviews/${reviewId}`)
+    try {
+      await submitCapture(draft.text)
+      toast('✓ 검토함에 올렸어요')
+      navigate('/reviews')
+    } catch (e) {
+      // 조용한 실패 금지: 실패를 알리고 입력 화면으로 되돌린다.
+      toast(`⚠️ 저장 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+      setStep('input')
+    }
   }
 
   if (step === 'extracting') {
@@ -58,7 +60,7 @@ export function CapturePage() {
           <StepProgress
             steps={EXTRACT_STEPS}
             title="AI가 정리하는 중…"
-            onComplete={finishExtract}
+            onComplete={() => void finishExtract()}
           />
           <p
             style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 20, textAlign: 'center' }}

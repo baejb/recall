@@ -1,131 +1,123 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Capture, MaskSpan, Memory, Review, ReviewCard, TsStatus } from '../types'
-import { SEED_CAPTURES, SEED_MEMORIES, SEED_REVIEWS } from '../mock/seed'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { Memory, Review } from '../types'
+import * as api from '../api/client'
+import { toMemory, toReview } from '../api/adapter'
 import { RecallContext, type RecallStore } from './recallContext'
 
-const TS_STATUS_ORDER: TsStatus[] = ['해결', '부분', '미해결']
-
-function cardKeywords(card: ReviewCard): string {
-  return (card.title + ' ' + (card.ts.problem || '') + ' ' + (card.kn.content || '')).toLowerCase()
+interface Snapshot {
+  memories: Memory[]
+  reviews: Review[]
+  reviewCount: number
 }
 
-/** mock 데이터 스토어 Provider. seed로 초기화하고 액션으로 불변 갱신한다. */
+/** 실 백엔드 연동 Provider. 마운트 시 목록을 로드하고, 변경 후 새로고침한다. */
 export function RecallProvider({ children }: { children: ReactNode }) {
-  const [captures, setCaptures] = useState<Capture[]>(SEED_CAPTURES)
-  const [memories, setMemories] = useState<Memory[]>(SEED_MEMORIES)
-  const [reviews, setReviews] = useState<Review[]>(SEED_REVIEWS)
-  const seq = useRef(100)
-  const nid = useCallback((p: string) => {
-    seq.current += 1
-    return p + seq.current
+  const [memories, setMemories] = useState<Memory[]>([])
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewCount, setReviewCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // 서버 3종 목록을 병렬로 읽어 프론트 모델로 변환(setState 없음 — 순수 페칭).
+  const fetchAll = useCallback(async (signal?: AbortSignal): Promise<Snapshot> => {
+    const [mem, rev, count] = await Promise.all([
+      api.getMemories(signal),
+      api.getReviews(signal),
+      api.getReviewCount(signal),
+    ])
+    return {
+      memories: mem.map(toMemory),
+      reviews: rev.map(toReview),
+      reviewCount: count.pending,
+    }
   }, [])
 
-  const patchMemory = useCallback((memId: string, patch: (m: Memory) => Memory) => {
-    setMemories((prev) => prev.map((m) => (m.id === memId ? patch(m) : m)))
+  const apply = useCallback((s: Snapshot) => {
+    setMemories(s.memories)
+    setReviews(s.reviews)
+    setReviewCount(s.reviewCount)
   }, [])
 
-  const addCaptureFromDraft = useCallback(
-    (masked: string, spans: MaskSpan[], card: ReviewCard) => {
-      const captureId = nid('c')
-      const reviewId = nid('r')
-      setCaptures((prev) => [...prev, { id: captureId, masked, spans, created: '오늘' }])
-      setReviews((prev) => [...prev, { id: reviewId, captureId, cards: [card] }])
-      return { captureId, reviewId }
+  // 수동 새로고침(재시도 버튼·변경 후). 이벤트 핸들러에서만 호출 → 즉시 loading 표시 OK.
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      apply(await fetchAll())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '데이터를 불러오지 못했어요')
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchAll, apply])
+
+  // 마운트 로드: 이펙트 본문에서 동기 setState를 피하려 async IIFE로 감싼다(await 이후에만 setState).
+  useEffect(() => {
+    const ctrl = new AbortController()
+    void (async () => {
+      try {
+        apply(await fetchAll(ctrl.signal))
+        setError(null)
+      } catch (e) {
+        if (ctrl.signal.aborted) return
+        setError(e instanceof Error ? e.message : '데이터를 불러오지 못했어요')
+      } finally {
+        if (!ctrl.signal.aborted) setLoading(false)
+      }
+    })()
+    return () => ctrl.abort()
+  }, [fetchAll, apply])
+
+  const submitCapture = useCallback(
+    async (rawText: string) => {
+      await api.createCapture(rawText)
+      // 서버가 비동기로 추출→검토함에 올린다. 잠시 뒤 새로고침해 반영.
+      await refresh()
     },
-    [nid]
+    [refresh]
   )
 
   const approveReview = useCallback(
-    (reviewId: string, cards: ReviewCard[]) => {
-      const review = reviews.find((r) => r.id === reviewId)
-      const captureId = review ? review.captureId : ''
-      const created: Memory[] = cards.map((c) => ({
-        id: nid('m'),
-        captureId,
-        type: c.type,
-        title: c.title || '(제목 없음)',
-        created: '오늘',
-        status: 'active',
-        firstSeen: '오늘',
-        lastSeen: '오늘',
-        hits: 1,
-        keywords: cardKeywords(c),
-        ts: c.ts,
-        kn: c.kn,
-      }))
-      setMemories((prev) => [...created, ...prev])
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId))
-      return created.length
+    async (reviewId: string) => {
+      const { memoryId } = await api.approveReview(Number(reviewId))
+      await refresh()
+      return memoryId
     },
-    [reviews, nid]
+    [refresh]
   )
 
-  const rejectReview = useCallback((reviewId: string) => {
-    setReviews((prev) => prev.filter((r) => r.id !== reviewId))
-  }, [])
-
-  const markRecur = useCallback(
-    (memId: string) =>
-      patchMemory(memId, (m) => ({ ...m, hits: (m.hits || 1) + 1, lastSeen: '오늘' })),
-    [patchMemory]
-  )
-
-  const recordRecurFromQuery = markRecur
-
-  const resolveNow = useCallback(
-    (memId: string) =>
-      patchMemory(memId, (m) =>
-        m.type === 'ts'
-          ? { ...m, ts: { ...m.ts, status: '해결' }, hits: (m.hits || 1) + 1, lastSeen: '오늘' }
-          : m
-      ),
-    [patchMemory]
-  )
-
-  const cycleStatus = useCallback(
-    (memId: string) =>
-      patchMemory(memId, (m) => {
-        if (m.type !== 'ts') return m
-        const next = TS_STATUS_ORDER[(TS_STATUS_ORDER.indexOf(m.ts.status) + 1) % 3]
-        return { ...m, ts: { ...m.ts, status: next } }
-      }),
-    [patchMemory]
-  )
-
-  const archiveMemory = useCallback(
-    (memId: string) => patchMemory(memId, (m) => ({ ...m, status: 'archived' })),
-    [patchMemory]
+  const rejectReview = useCallback(
+    async (reviewId: string) => {
+      await api.rejectReview(Number(reviewId))
+      await refresh()
+    },
+    [refresh]
   )
 
   const store = useMemo<RecallStore>(
     () => ({
-      captures,
       memories,
       reviews,
-      getCapture: (id) => captures.find((c) => c.id === id),
+      reviewCount,
+      loading,
+      error,
+      refresh,
       getMemory: (id) => memories.find((m) => m.id === id),
       getReview: (id) => reviews.find((r) => r.id === id),
-      addCaptureFromDraft,
+      submitCapture,
       approveReview,
       rejectReview,
-      markRecur,
-      resolveNow,
-      recordRecurFromQuery,
-      cycleStatus,
-      archiveMemory,
     }),
     [
-      captures,
       memories,
       reviews,
-      addCaptureFromDraft,
+      reviewCount,
+      loading,
+      error,
+      refresh,
+      submitCapture,
       approveReview,
       rejectReview,
-      markRecur,
-      resolveNow,
-      recordRecurFromQuery,
-      cycleStatus,
-      archiveMemory,
     ]
   )
 

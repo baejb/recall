@@ -7,7 +7,7 @@ function navClass({ isActive }: { isActive: boolean }): string {
 
 /** 좌측 내비게이션. 핵심 흐름(물어보기·붙여넣기·검토함·내 기억)만 노출한다. */
 export function Sidebar() {
-  const { reviews } = useRecall()
+  const { reviewCount } = useRecall()
   return (
     <aside className="side">
       <div className="brand">
@@ -27,7 +27,7 @@ export function Sidebar() {
       </NavLink>
       <NavLink to="/reviews" className={navClass}>
         <span className="ico">📥</span> 검토함
-        {reviews.length > 0 && <span className="badge">{reviews.length}</span>}
+        {reviewCount > 0 && <span className="badge">{reviewCount}</span>}
       </NavLink>
 
       <div className="navlabel">보기</div>

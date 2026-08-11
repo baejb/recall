@@ -1,35 +1,18 @@
 import { useState } from 'react'
-import type { QueryScope } from '../types'
 import { useToast } from '../hooks/useToast'
-import { StepProgress } from '../components/StepProgress'
 import { QueryResult } from '../components/QueryResult'
 
-const THINK_STEPS = [
-  '질문 의도 파악',
-  '내 기억 검색 (의미 + 키워드)',
-  '새로 조사 (필요 시)',
-  '비교 → 답 구성',
-] as const
-
-const SCOPES: { key: QueryScope; label: string }[] = [
-  { key: '전체', label: '전체' },
-  { key: 'ts', label: '🔧 트러블슈팅' },
-  { key: 'kn', label: '📘 지식' },
-]
-
 const EXAMPLES = [
-  { q: '그 도커 권한 에러 또 났어', label: '🔁 도커 권한 또…' },
-  { q: 'CORS 프리플라이트 왜 막히지?', label: '🔁 CORS 또…' },
+  { q: '도커 권한 에러 어떻게 풀었지?', label: '🔧 도커 권한…' },
+  { q: 'CORS 프리플라이트 왜 막히지?', label: '🔧 CORS…' },
   { q: 'RRF가 뭐야?', label: '📘 RRF가 뭐야?' },
-  { q: '쿠버네티스 인그레스 설정 어떻게 해?', label: '🆕 처음 보는 질문…' },
 ]
 
-type Phase = 'home' | 'thinking' | 'result'
+type Phase = 'home' | 'result'
 
 export function QueryPage() {
   const [phase, setPhase] = useState<Phase>('home')
   const [question, setQuestion] = useState('')
-  const [scope, setScope] = useState<QueryScope>('전체')
   const [input, setInput] = useState('')
   const toast = useToast()
 
@@ -40,7 +23,7 @@ export function QueryPage() {
       return
     }
     setQuestion(trimmed)
-    setPhase('thinking')
+    setPhase('result')
   }
 
   const backHome = () => {
@@ -48,42 +31,19 @@ export function QueryPage() {
     setInput('')
   }
 
-  if (phase === 'thinking') {
-    return (
-      <section className="screen">
-        <StepProgress steps={THINK_STEPS} title="생각 중…" onComplete={() => setPhase('result')} />
-      </section>
-    )
-  }
-
   if (phase === 'result') {
-    return <QueryResult question={question} scope={scope} onBack={backHome} />
+    // key={question} — 새 질문마다 재마운트해 스트리밍 상태를 깨끗이 초기화.
+    return <QueryResult key={question} question={question} onBack={backHome} />
   }
 
   return (
     <section className="screen">
       <div className="eyebrow">물어보기</div>
-      <h1 className="h1">무엇이든 묻거나, 그냥 붙여넣어 보세요</h1>
+      <h1 className="h1">무엇이든 물어보세요</h1>
       <p className="lede">
-        Recall이 먼저 내 기억을 뒤져요. <b>예전에 겪은 문제면 다시 풀지 않고</b> 그때 해결책·근거를
-        꺼내주고, 처음이면 새로 풀어 저장까지 제안해요.
+        Recall이 내 기억을 뒤져 <b>근거와 함께</b> 답해요. 저장된 기억에 없으면 지어내지 않고 "기록
+        없음"으로 남겨요.
       </p>
-      <div className="catfilter">
-        <span
-          style={{ fontSize: 12.5, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}
-        >
-          범위
-        </span>
-        {SCOPES.map((s) => (
-          <button
-            key={s.key}
-            className={scope === s.key ? 'catf on' : 'catf'}
-            onClick={() => setScope(s.key)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
       <div className="card pad">
         <input
           type="text"
@@ -109,9 +69,7 @@ export function QueryPage() {
         </div>
         <div className="note">
           <b>흐름</b>
-          <span>
-            질문 → 의도 파악 → (기억 검색 + 새로 조사) → 비교 → 답. 실제로 저장된 기억에서 찾아요.
-          </span>
+          <span>질문 → 기억 검색(의미 + 키워드) → 근거와 함께 답. 저장된 기억에서만 찾아요.</span>
         </div>
       </div>
     </section>
