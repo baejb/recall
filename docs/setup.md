@@ -22,6 +22,7 @@ Recall 저장소에서 Claude Code / 팀원이 **가장 먼저 읽는 가이드*
 | `CLAUDE.md` (루트 + frontend/backend/nginx) | 불변 원칙 · 스택 · 실행 · **저장소 구조** · **커밋 규칙** · 영역별 코딩 규칙 | Claude + 사람 |
 | `docs/recall_ai_prd.md` | 기능·파이프라인 근거(단계 C·P·R·W·RR·A·M0·S2·S3·S4, 메모리 5유형) | Claude + 사람 |
 | `docs/architecture.md` | 백엔드 아키텍처 결정(선택 이유·모듈 경계·확장 가드레일·분담) | 사람 |
+| `docs/design/` | 슬라이스별 설계 문서(왜·무엇을·설계 판단·검증). 인덱스는 `docs/design/README.md` | 사람 |
 | `docs/hooks.md` | 훅 가이드(편집 자동포맷 + 커밋 강제검사) | 사람 |
 | `docs/development_v1.md` | 개발 버전 v1 요약 | 사람 |
 | `.claude/{settings.json, skills/, hooks/}` | 팀 공유 권한 · 스킬(recall-feature·git-commit·test) · 자동포맷 훅 | Claude/도구 |
@@ -53,6 +54,11 @@ Recall 저장소에서 Claude Code / 팀원이 **가장 먼저 읽는 가이드*
 | 4 | 2026-07-30 | tooling | 포맷터 = prettier(front) / spotless google-java-format AOSP(back) | 기존 4칸 들여쓰기 유지, 훅으로 강제 | active |
 | 5 | 2026-07-30 | scope | 배포까지 목표(로컬 실행만 아님) | 피드백 반영. 배포 구성은 추후 확정 | open |
 | 6 | 2026-08-03 | arch | 백엔드 = 실용 계층형 모듈러 모놀리스 + LLM/임베딩만 경량 헥사고날, 유형별 전략 SPI | 2인·단일 인바운드·Postgres 고정 → 풀 헥사고날 이득<비용. 확장은 "type 추가" 축에 최적화 (→ `docs/architecture.md`) | active |
+| 7 | 2026-08-10 | search | 벡터 매핑 = JdbcTemplate native 문자열 리터럴(`CAST(? AS vector)`) | pgvector-java/hibernate-vector 의존성 추가 없이. memory_embedding은 JPA 엔티티 없이 native (→ `docs/design/knowledge-02-search.md`) | active |
+| 8 | 2026-08-10 | search | 임베딩 provider = Voyage(voyage-3, 1024차원) BYO key, 미설정 시 stub | 프롬프트 LLM과 별개 키. 없어도 부팅·BM25 동작 | active |
+| 9 | 2026-08-10 | search | RRF 융합 K=60, knowledge 채널 가중치 vector 2.0 / bm25 1.0 | 결정론 융합(LLM 금지). 지식은 vector 중심·bm25 보조(PRD). 라벨셋 fit 튜닝 대상 | active |
+| 10 | 2026-08-11 | search | BM25 질의 = lexeme OR 결합(plainto_tsquery AND 아님) | 한국어 형태소 사전 없어 조사 차이로 AND 매칭 실패 | active |
+| 11 | 2026-08-11 | store | S4 유사 임계 τ_sim=0.75, 판정 불확실 fallback = SUPPLEMENT | 후보는 있으니 NEW 아님, CONFLICT는 과함(자동 덮어쓰기 금지) → 사람 검토 유도 (→ `docs/design/knowledge-03-s4-judgement.md`) | active |
 
 ## 4. 개인용 설정 (`templates/`)
 
