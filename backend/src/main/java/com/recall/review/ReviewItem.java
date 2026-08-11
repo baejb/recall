@@ -69,10 +69,18 @@ public class ReviewItem {
     /** JPA 전용 기본 생성자. */
     protected ReviewItem() {}
 
-    public ReviewItem(Capture capture, MemoryType type, Verdict judgement, String proposed) {
+    public ReviewItem(
+            Capture capture,
+            MemoryType type,
+            Verdict judgement,
+            Memory targetMemory,
+            String judgeReason,
+            String proposed) {
         this.capture = capture;
         this.type = type;
         this.judgement = judgement;
+        this.memory = targetMemory;
+        this.judgeReason = judgeReason;
         this.proposed = proposed;
     }
 

@@ -49,14 +49,23 @@ public class MemorySearchStore {
                 k);
     }
 
-    /** 전문검색(BM25 유사) 상위 k. */
+    /**
+     * 전문검색(BM25 유사) 상위 k. 질의 토큰을 OR로 결합해 부분 매칭한다. plainto_tsquery는 토큰을 AND로 묶어, 형태소 사전이 없는 한국어에선 조사
+     * 차이(방법 vs 방법이다)로 매칭이 거의 안 되기 때문이다.
+     */
     public List<ScoredMemory> searchByKeyword(String query, MemoryType type, int k) {
+        // 질의를 tsvector로 정규화 → lexeme들을 ' | '(OR)로 이어 tsquery 생성.
+        String orQuery =
+                "to_tsquery('simple', array_to_string(tsvector_to_array(to_tsvector('simple', ?)), ' | '))";
         return jdbc.query(
-                "SELECT id, ts_rank(search_tsv, plainto_tsquery('simple', ?)) AS score "
+                "SELECT id, ts_rank(search_tsv, "
+                        + orQuery
+                        + ") AS score "
                         + "FROM memory "
                         + "WHERE type = ? AND status = 'active' "
-                        + "AND search_tsv @@ plainto_tsquery('simple', ?) "
-                        + "ORDER BY score DESC LIMIT ?",
+                        + "AND search_tsv @@ "
+                        + orQuery
+                        + " ORDER BY score DESC LIMIT ?",
                 (rs, i) -> new ScoredMemory(rs.getLong("id"), rs.getDouble("score")),
                 query,
                 type.name(),

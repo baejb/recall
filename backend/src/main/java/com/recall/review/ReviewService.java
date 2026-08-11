@@ -153,6 +153,9 @@ public class ReviewService {
                 item.getId(),
                 item.getCapture().getId(),
                 item.getJudgement().name(),
+                item.getMemory() == null ? null : item.getMemory().getId(),
+                item.getJudgeReason(),
+                item.getType() == null ? null : item.getType().name(),
                 item.getStatus(),
                 item.getProposed(),
                 item.getCreatedAt());
