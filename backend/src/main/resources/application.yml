@@ -29,6 +29,11 @@ management:
 
 recall:
   llm:
+    provider: ${RECALL_LLM_PROVIDER:anthropic}   # anthropic | openai | google
+    api-key: ${RECALL_LLM_API_KEY:}              # 비면 stub LLM(추출·판정이 fallback)
+    model: ${RECALL_LLM_MODEL_STRONG:claude-opus-4-8}
+    base-url: ${RECALL_LLM_BASE_URL:}            # 비면 provider 기본 URL
+    max-tokens: 4096
     embedding:
       api-key: ${VOYAGE_API_KEY:}          # 비면 stub 임베딩(벡터 검색 무의미)
       model: voyage-3

@@ -15,15 +15,27 @@ import org.springframework.context.annotation.Configuration;
  * 여기로 모았다.
  */
 @Configuration
-@EnableConfigurationProperties(EmbeddingProperties.class)
+@EnableConfigurationProperties({EmbeddingProperties.class, LlmProperties.class})
 public class LlmConfig {
 
     private static final Logger log = LoggerFactory.getLogger(LlmConfig.class);
 
+    /** API 키가 있으면 provider별 어댑터, 없으면 stub. 알 수 없는 provider는 설정 오류이므로 조용히 넘기지 않고 예외로 드러낸다. */
     @Bean
     @ConditionalOnMissingBean(LlmClient.class)
-    LlmClient stubLlmClient() {
-        return new StubLlmClient();
+    LlmClient llmClient(LlmProperties props) {
+        if (props.apiKey() == null || props.apiKey().isBlank()) {
+            log.warn("recall.llm.api-key 미설정 → stub LLM 사용(추출·판정이 fallback 경로)");
+            return new StubLlmClient();
+        }
+        return switch (props.provider().toLowerCase()) {
+            case "anthropic" -> new AnthropicLlmClient(props);
+            case "openai" -> new OpenAiLlmClient(props);
+            case "google" -> new GoogleLlmClient(props);
+            default ->
+                    throw new IllegalStateException(
+                            "알 수 없는 recall.llm.provider: " + props.provider());
+        };
     }
 
     /**
