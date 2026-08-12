@@ -25,8 +25,11 @@ public class HybridSearchService {
     /** 채널별로 융합 전에 가져올 후보 수. */
     private static final int CHANNEL_K = 20;
 
-    /** 재색인 중 벡터 채널을 격하하는 임베딩 상태(불변 원칙: 조용한 실패 금지 — 상태로 동작을 바꾼다). */
-    private static final String STATUS_REINDEXING = "REINDEXING";
+    /**
+     * 벡터 채널이 안전한 유일한 임베딩 상태. REINDEXING(신구 모델 혼재)뿐 아니라 FAILED(재색인이 중간에 실패해 memory_embedding 이 신구 모델
+     * 벡터가 섞인 채로 남음)도 벡터 공간이 일관되지 않아 격하 대상이다(불변 원칙: 조용한 실패 금지 — 상태로 동작을 바꾼다).
+     */
+    private static final String STATUS_READY = "READY";
 
     private static final String CH_VECTOR = "memory_vector";
     private static final String CH_BM25 = "memory_bm25";
@@ -51,17 +54,17 @@ public class HybridSearchService {
     }
 
     /**
-     * 질문에 대한 유형별 하이브리드 검색 결과(융합 순위 순). embedding_status가 REINDEXING이면 벡터 인덱스가 신구 모델 혼재 상태라 벡터 채널을
-     * 건너뛰고 BM25만 사용한다(격하).
+     * 질문에 대한 유형별 하이브리드 검색 결과(융합 순위 순). embedding_status가 READY가 아니면(REINDEXING: 신구 모델 혼재, FAILED:
+     * 재색인이 중간에 실패해 신구 모델 벡터 혼재) 벡터 채널을 건너뛰고 BM25만 사용한다(격하).
      */
     public List<Memory> search(String question, MemoryType type) {
-        boolean reindexing = STATUS_REINDEXING.equals(settings.embeddingStatus());
+        boolean vectorReady = STATUS_READY.equals(settings.embeddingStatus());
         List<Long> vectorIds =
-                reindexing
-                        ? List.of()
-                        : ids(
+                vectorReady
+                        ? ids(
                                 store.searchByVector(
-                                        embeddingClient.embedQuery(question), type, CHANNEL_K));
+                                        embeddingClient.embedQuery(question), type, CHANNEL_K))
+                        : List.of();
         List<Long> bm25Ids = ids(store.searchByKeyword(question, type, CHANNEL_K));
 
         Map<String, List<Long>> ranked = Map.of(CH_VECTOR, vectorIds, CH_BM25, bm25Ids);
