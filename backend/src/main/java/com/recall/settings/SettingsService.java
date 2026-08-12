@@ -74,7 +74,7 @@ public class SettingsService {
     @Transactional
     public UpdateResult update(SettingsUpdate u) {
         ModelSetting s = row();
-        boolean embeddingChanged = false;
+        boolean reindexNeeded = false;
 
         if (u.chatProvider() != null) {
             ProviderCatalog.requireSupported(Role.CHAT, u.chatProvider());
@@ -85,24 +85,32 @@ public class SettingsService {
 
         if (u.embeddingProvider() != null) {
             ProviderCatalog.requireSupported(Role.EMBEDDING, u.embeddingProvider());
-            embeddingChanged |= !u.embeddingProvider().equals(s.getEmbeddingProvider());
+            reindexNeeded |= !u.embeddingProvider().equals(s.getEmbeddingProvider());
             s.setEmbeddingProvider(u.embeddingProvider());
         }
         if (u.embeddingModel() != null) {
-            embeddingChanged |= !u.embeddingModel().equals(s.getEmbeddingModel());
+            reindexNeeded |= !u.embeddingModel().equals(s.getEmbeddingModel());
             s.setEmbeddingModel(u.embeddingModel());
         }
-        if (notBlank(u.embeddingApiKey())) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
+        boolean embeddingKeyRotated = notBlank(u.embeddingApiKey());
+        if (embeddingKeyRotated) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
 
-        if (embeddingChanged) {
+        // 검증(probe)과 재색인은 별개다: provider/model 이 바뀌면 벡터 공간 자체가 달라져 재색인이
+        // 필요하지만, 키만 회전(같은 provider+model)해도 오·타이핑된 키가 그대로 저장돼 나중에야
+        // 호출 시점에 실패하지 않도록 새 키로 프로브는 반드시 돌려야 한다(기존 벡터는 유효하게 남음).
+        boolean validationNeeded = reindexNeeded || embeddingKeyRotated;
+        if (validationNeeded) {
             probeEmbedding(embeddingPropsFrom(s));
+        }
+
+        if (reindexNeeded) {
             // 프로브 성공 후에만 재색인 트리거. REINDEXING 을 이 트랜잭션에 함께 커밋하고,
             // 재색인은 AFTER_COMMIT 이벤트 수신자(ReindexService)가 배경에서 수행한다(순환 회피).
             setEmbeddingStatus("REINDEXING");
             publisher.publishEvent(new EmbeddingModelChangedEvent());
         }
 
-        return new UpdateResult(embeddingChanged);
+        return new UpdateResult(reindexNeeded);
     }
 
     /**
@@ -144,5 +152,8 @@ public class SettingsService {
             String embeddingModel,
             String embeddingApiKey) {}
 
+    /**
+     * @param embeddingChanged 재색인이 트리거됨(REINDEXING 전이 발생) — 임베딩 키만 회전한 경우는 false.
+     */
     public record UpdateResult(boolean embeddingChanged) {}
 }
