@@ -11,6 +11,7 @@ import com.recall.llm.LlmProperties;
 import com.recall.settings.SettingsService.SettingsUpdate;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class SettingsServiceProbeTest {
 
@@ -42,7 +43,8 @@ class SettingsServiceProbeTest {
                         new SecretCipher(""),
                         new EmbeddingProperties("voyage", "sk-env-key", null, null, 1024),
                         new LlmProperties("anthropic", "", null, null, 4096),
-                        factory);
+                        factory,
+                        mock(ApplicationEventPublisher.class));
 
         assertThrows(
                 EmbeddingProbeException.class,

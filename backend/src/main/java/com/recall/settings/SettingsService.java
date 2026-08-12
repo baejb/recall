@@ -5,6 +5,7 @@ import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import com.recall.settings.ProviderCatalog.Role;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,18 +18,21 @@ public class SettingsService {
     private final EmbeddingProperties envEmbedding;
     private final LlmProperties envChat;
     private final EmbeddingClientFactory embeddingFactory;
+    private final ApplicationEventPublisher publisher;
 
     public SettingsService(
             ModelSettingRepository repository,
             SecretCipher cipher,
             EmbeddingProperties envEmbedding,
             LlmProperties envChat,
-            EmbeddingClientFactory embeddingFactory) {
+            EmbeddingClientFactory embeddingFactory,
+            ApplicationEventPublisher publisher) {
         this.repository = repository;
         this.cipher = cipher;
         this.envEmbedding = envEmbedding;
         this.envChat = envChat;
         this.embeddingFactory = embeddingFactory;
+        this.publisher = publisher;
     }
 
     private ModelSetting row() {
@@ -92,6 +96,10 @@ public class SettingsService {
 
         if (embeddingChanged) {
             probeEmbedding(embeddingPropsFrom(s));
+            // 프로브 성공 후에만 재색인 트리거. REINDEXING 을 이 트랜잭션에 함께 커밋하고,
+            // 재색인은 AFTER_COMMIT 이벤트 수신자(ReindexService)가 배경에서 수행한다(순환 회피).
+            setEmbeddingStatus("REINDEXING");
+            publisher.publishEvent(new EmbeddingModelChangedEvent());
         }
 
         return new UpdateResult(embeddingChanged);

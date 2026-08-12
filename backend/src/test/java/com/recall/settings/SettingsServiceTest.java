@@ -11,6 +11,7 @@ import com.recall.settings.SettingsService.SettingsUpdate;
 import java.util.Base64;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class SettingsServiceTest {
 
@@ -40,7 +41,8 @@ class SettingsServiceTest {
                         realCipher(),
                         new EmbeddingProperties("voyage", "", null, null, 1024),
                         new LlmProperties("anthropic", "", null, null, 4096),
-                        mock(EmbeddingClientFactory.class));
+                        mock(EmbeddingClientFactory.class),
+                        mock(ApplicationEventPublisher.class));
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
@@ -65,7 +67,8 @@ class SettingsServiceTest {
                         new SecretCipher(""), // 비활성
                         new EmbeddingProperties("voyage", "", null, null, 1024),
                         new LlmProperties("anthropic", "", null, null, 4096),
-                        mock(EmbeddingClientFactory.class));
+                        mock(EmbeddingClientFactory.class),
+                        mock(ApplicationEventPublisher.class));
         assertThrows(
                 IllegalStateException.class,
                 () -> svc.update(new SettingsUpdate(null, null, "sk-x", null, null, null)));
