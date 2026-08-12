@@ -39,16 +39,22 @@ public class LlmConfig {
     }
 
     /**
-     * API 키가 있으면 Voyage 어댑터, 없으면 stub. ({@code @ConditionalOnProperty}는 빈 문자열도 "존재"로 봐서 미설정과 구분이 안
-     * 되므로 런타임에 명시적으로 판단한다.)
+     * API 키가 있으면 provider별 임베딩 어댑터, 없으면 stub. 알 수 없는 provider는 설정 오류이므로 조용히 넘기지 않고 예외로 드러낸다.
+     * ({@code @ConditionalOnProperty}는 빈 문자열도 "존재"로 봐서 미설정과 구분이 안 되므로 런타임에 명시적으로 판단한다.)
      */
     @Bean
     @ConditionalOnMissingBean(EmbeddingClient.class)
     EmbeddingClient embeddingClient(EmbeddingProperties props) {
-        if (props.apiKey() != null && !props.apiKey().isBlank()) {
-            return new VoyageEmbeddingClient(props);
+        if (props.apiKey() == null || props.apiKey().isBlank()) {
+            log.warn("recall.llm.embedding.api-key 미설정 → stub 임베딩 사용(벡터 검색 무의미)");
+            return new StubEmbeddingClient();
         }
-        log.warn("recall.llm.embedding.api-key 미설정 → stub 임베딩 사용(벡터 검색 무의미)");
-        return new StubEmbeddingClient();
+        return switch (props.provider().toLowerCase()) {
+            case "voyage" -> new VoyageEmbeddingClient(props);
+            case "openai" -> new OpenAiEmbeddingClient(props);
+            default ->
+                    throw new IllegalStateException(
+                            "알 수 없는 recall.llm.embedding.provider: " + props.provider());
+        };
     }
 }
