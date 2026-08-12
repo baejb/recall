@@ -1,7 +1,9 @@
 package com.recall.llm;
 
+import com.recall.common.SecretCipher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -56,5 +58,11 @@ public class LlmConfig {
                     throw new IllegalStateException(
                             "알 수 없는 recall.llm.embedding.provider: " + props.provider());
         };
+    }
+
+    /** provider 키 at-rest 암호화용 cipher. 마스터키(recall.security.secret-key) 없으면 비활성(fail-closed). */
+    @Bean
+    SecretCipher secretCipher(@Value("${recall.security.secret-key:}") String key) {
+        return new SecretCipher(key);
     }
 }

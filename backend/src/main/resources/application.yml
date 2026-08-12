@@ -28,6 +28,8 @@ management:
         include: health,info
 
 recall:
+  security:
+    secret-key: ${RECALL_SECRET_KEY:}
   llm:
     provider: ${RECALL_LLM_PROVIDER:anthropic}   # anthropic | openai | google
     api-key: ${RECALL_LLM_API_KEY:}              # 비면 stub LLM(추출·판정이 fallback)
