@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -87,8 +86,12 @@ public class ReindexService {
         }
     }
 
-    /** model_setting(id=1) 의 임베딩 상태를 전이한다. SettingsService 에 의존하지 않기 위해 직접 쓴다. */
-    @Transactional
+    /**
+     * model_setting(id=1) 의 임베딩 상태를 전이한다. SettingsService 에 의존하지 않기 위해 직접 쓴다.
+     *
+     * <p>{@code reindexAll()} 내부에서 self-invocation 으로만 호출돼 프록시를 타지 않으므로 여기의 {@code @Transactional}은
+     * 항상 no-op 이었다(제거). 영속은 {@link ModelSettingRepository#save}가 자체 트랜잭션으로 보장한다.
+     */
     public void setEmbeddingStatus(String status) {
         ModelSetting s =
                 settingRepository
