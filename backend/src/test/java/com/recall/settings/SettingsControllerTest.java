@@ -10,17 +10,45 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
+import com.recall.llm.provider.anthropic.AnthropicChatProvider;
+import com.recall.llm.provider.google.GoogleChatProvider;
+import com.recall.llm.provider.google.GoogleEmbeddingProvider;
+import com.recall.llm.provider.openai.OpenAiChatProvider;
+import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
+import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SettingsController.class)
+@Import(SettingsControllerTest.CatalogConfig.class)
 class SettingsControllerTest {
 
     private static final String SECRET_KEY = "sk-secret-123";
+
+    /** 카탈로그를 실제 서술자에서 파생시켜 slice 에 제공한다 — 응답 비대칭은 하드코딩이 아니라 등록 서술자에서 나온다. */
+    @TestConfiguration
+    static class CatalogConfig {
+        @Bean
+        ProviderCatalog providerCatalog() {
+            return new ProviderCatalog(
+                    List.of(
+                            new AnthropicChatProvider(),
+                            new OpenAiChatProvider(),
+                            new GoogleChatProvider()),
+                    List.of(
+                            new OpenAiEmbeddingProvider(),
+                            new VoyageEmbeddingProvider(),
+                            new GoogleEmbeddingProvider()));
+        }
+    }
 
     @Autowired private MockMvc mockMvc;
 

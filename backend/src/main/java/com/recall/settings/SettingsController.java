@@ -25,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettingsController {
 
     private final SettingsService settingsService;
+    private final ProviderCatalog catalog;
 
-    public SettingsController(SettingsService settingsService) {
+    public SettingsController(SettingsService settingsService, ProviderCatalog catalog) {
         this.settingsService = settingsService;
+        this.catalog = catalog;
     }
 
     /** 현재 모델 설정 조회. */
@@ -46,7 +48,7 @@ public class SettingsController {
     /** 역할별 허용 provider·모델 카탈로그(UI 드롭다운용). */
     @GetMapping("/catalog")
     public CatalogResponse catalog() {
-        return new CatalogResponse(ProviderCatalog.chatModels(), ProviderCatalog.embeddingModels());
+        return new CatalogResponse(catalog.chatModels(), catalog.embeddingModels());
     }
 
     private ModelSettingsResponse currentResponse() {

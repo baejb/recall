@@ -2,6 +2,7 @@ package com.recall.llm;
 
 import com.recall.common.SecretCipher;
 import com.recall.settings.SettingsService;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,13 +25,13 @@ import org.springframework.context.annotation.Configuration;
 public class LlmConfig {
 
     @Bean
-    EmbeddingClientFactory embeddingClientFactory() {
-        return new EmbeddingClientFactory();
+    EmbeddingClientFactory embeddingClientFactory(List<EmbeddingProvider> providers) {
+        return new EmbeddingClientFactory(providers);
     }
 
     @Bean
-    LlmClientFactory llmClientFactory() {
-        return new LlmClientFactory();
+    LlmClientFactory llmClientFactory(List<ChatProvider> providers) {
+        return new LlmClientFactory(providers);
     }
 
     @Bean

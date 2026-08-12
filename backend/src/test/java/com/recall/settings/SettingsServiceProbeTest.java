@@ -8,9 +8,15 @@ import com.recall.llm.EmbeddingClient;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
+import com.recall.llm.provider.anthropic.AnthropicChatProvider;
+import com.recall.llm.provider.google.GoogleEmbeddingProvider;
+import com.recall.llm.provider.openai.OpenAiChatProvider;
+import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
+import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.SettingsService.SettingsUpdate;
 import com.recall.settings.SettingsService.UpdateResult;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.Test;
@@ -25,6 +31,15 @@ class SettingsServiceProbeTest {
         return new SecretCipher(Base64.getEncoder().encodeToString(kg.generateKey().getEncoded()));
     }
 
+    private static ProviderCatalog realCatalog() {
+        return new ProviderCatalog(
+                List.of(new AnthropicChatProvider(), new OpenAiChatProvider()),
+                List.of(
+                        new OpenAiEmbeddingProvider(),
+                        new VoyageEmbeddingProvider(),
+                        new GoogleEmbeddingProvider()));
+    }
+
     private SettingsService newService(
             ModelSettingRepository repo,
             EmbeddingClientFactory factory,
@@ -36,6 +51,7 @@ class SettingsServiceProbeTest {
                 new EmbeddingProperties("voyage", "sk-env-key", null, null, 1024),
                 new LlmProperties("anthropic", "", null, null, 4096),
                 factory,
+                realCatalog(),
                 publisher);
     }
 
@@ -68,6 +84,7 @@ class SettingsServiceProbeTest {
                         new EmbeddingProperties("voyage", "sk-env-key", null, null, 1024),
                         new LlmProperties("anthropic", "", null, null, 4096),
                         factory,
+                        realCatalog(),
                         mock(ApplicationEventPublisher.class));
 
         assertThrows(

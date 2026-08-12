@@ -18,6 +18,7 @@ public class SettingsService {
     private final EmbeddingProperties envEmbedding;
     private final LlmProperties envChat;
     private final EmbeddingClientFactory embeddingFactory;
+    private final ProviderCatalog catalog;
     private final ApplicationEventPublisher publisher;
 
     public SettingsService(
@@ -26,12 +27,14 @@ public class SettingsService {
             EmbeddingProperties envEmbedding,
             LlmProperties envChat,
             EmbeddingClientFactory embeddingFactory,
+            ProviderCatalog catalog,
             ApplicationEventPublisher publisher) {
         this.repository = repository;
         this.cipher = cipher;
         this.envEmbedding = envEmbedding;
         this.envChat = envChat;
         this.embeddingFactory = embeddingFactory;
+        this.catalog = catalog;
         this.publisher = publisher;
     }
 
@@ -77,14 +80,14 @@ public class SettingsService {
         boolean reindexNeeded = false;
 
         if (u.chatProvider() != null) {
-            ProviderCatalog.requireSupported(Role.CHAT, u.chatProvider());
+            catalog.requireSupported(Role.CHAT, u.chatProvider());
             s.setChatProvider(u.chatProvider());
         }
         if (u.chatModel() != null) s.setChatModel(u.chatModel());
         if (notBlank(u.chatApiKey())) s.setChatApiKeyEnc(encrypt(u.chatApiKey()));
 
         if (u.embeddingProvider() != null) {
-            ProviderCatalog.requireSupported(Role.EMBEDDING, u.embeddingProvider());
+            catalog.requireSupported(Role.EMBEDDING, u.embeddingProvider());
             reindexNeeded |= !u.embeddingProvider().equals(s.getEmbeddingProvider());
             s.setEmbeddingProvider(u.embeddingProvider());
         }
