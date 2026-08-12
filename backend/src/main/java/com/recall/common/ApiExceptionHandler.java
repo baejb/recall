@@ -1,6 +1,5 @@
 package com.recall.common;
 
-import com.recall.settings.EmbeddingProbeException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -57,9 +56,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    /** 임베딩 설정 저장 전 프로브 실패(키/모델 오류 등) — 400. 키 값은 메시지에 담기지 않는다. */
-    @ExceptionHandler(EmbeddingProbeException.class)
-    public ProblemDetail handleEmbeddingProbe(EmbeddingProbeException ex) {
+    /** 잘못된 요청(예: 임베딩 설정 저장 전 프로브 실패 — 키/모델 오류 등) — 400. 키 값은 메시지에 담기지 않는다. */
+    @ExceptionHandler(BadRequestException.class)
+    public ProblemDetail handleBadRequest(BadRequestException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
