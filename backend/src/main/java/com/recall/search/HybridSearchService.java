@@ -8,6 +8,7 @@ import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
 import com.recall.memory.ScoredMemory;
 import com.recall.memory.type.PlanContribution;
+import com.recall.settings.SettingsService;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +25,9 @@ public class HybridSearchService {
     /** 채널별로 융합 전에 가져올 후보 수. */
     private static final int CHANNEL_K = 20;
 
+    /** 재색인 중 벡터 채널을 격하하는 임베딩 상태(불변 원칙: 조용한 실패 금지 — 상태로 동작을 바꾼다). */
+    private static final String STATUS_REINDEXING = "REINDEXING";
+
     private static final String CH_VECTOR = "memory_vector";
     private static final String CH_BM25 = "memory_bm25";
 
@@ -31,22 +35,33 @@ public class HybridSearchService {
     private final EmbeddingClient embeddingClient;
     private final MemoryRepository memoryRepository;
     private final StrategyRegistry<PlanContribution> plans;
+    private final SettingsService settings;
 
     public HybridSearchService(
             MemorySearchStore store,
             EmbeddingClient embeddingClient,
             MemoryRepository memoryRepository,
-            List<PlanContribution> planContributions) {
+            List<PlanContribution> planContributions,
+            SettingsService settings) {
         this.store = store;
         this.embeddingClient = embeddingClient;
         this.memoryRepository = memoryRepository;
         this.plans = new StrategyRegistry<>(planContributions);
+        this.settings = settings;
     }
 
-    /** 질문에 대한 유형별 하이브리드 검색 결과(융합 순위 순). */
+    /**
+     * 질문에 대한 유형별 하이브리드 검색 결과(융합 순위 순). embedding_status가 REINDEXING이면 벡터 인덱스가 신구 모델 혼재 상태라 벡터 채널을
+     * 건너뛰고 BM25만 사용한다(격하).
+     */
     public List<Memory> search(String question, MemoryType type) {
-        float[] queryVector = embeddingClient.embedQuery(question);
-        List<Long> vectorIds = ids(store.searchByVector(queryVector, type, CHANNEL_K));
+        boolean reindexing = STATUS_REINDEXING.equals(settings.embeddingStatus());
+        List<Long> vectorIds =
+                reindexing
+                        ? List.of()
+                        : ids(
+                                store.searchByVector(
+                                        embeddingClient.embedQuery(question), type, CHANNEL_K));
         List<Long> bm25Ids = ids(store.searchByKeyword(question, type, CHANNEL_K));
 
         Map<String, List<Long>> ranked = Map.of(CH_VECTOR, vectorIds, CH_BM25, bm25Ids);
