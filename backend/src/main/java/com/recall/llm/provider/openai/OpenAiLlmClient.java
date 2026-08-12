@@ -1,5 +1,8 @@
-package com.recall.llm;
+package com.recall.llm.provider.openai;
 
+import com.recall.llm.LlmClient;
+import com.recall.llm.LlmConfig;
+import com.recall.llm.LlmProperties;
 import java.util.List;
 import org.springframework.web.client.RestClient;
 

@@ -2,6 +2,7 @@ package com.recall.llm;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.recall.llm.provider.openai.OpenAiEmbeddingClient;
 import org.junit.jupiter.api.Test;
 
 class EmbeddingClientFactoryTest {

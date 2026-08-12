@@ -1,5 +1,8 @@
 package com.recall.llm;
 
+import com.recall.llm.provider.google.GoogleEmbeddingClient;
+import com.recall.llm.provider.openai.OpenAiEmbeddingClient;
+import com.recall.llm.provider.voyage.VoyageEmbeddingClient;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,6 +30,7 @@ public class EmbeddingClientFactory {
         return switch (props.provider().toLowerCase()) {
             case "voyage" -> new VoyageEmbeddingClient(props);
             case "openai" -> new OpenAiEmbeddingClient(props);
+            case "google" -> new GoogleEmbeddingClient(props);
             default ->
                     throw new IllegalStateException(
                             "알 수 없는 embedding provider: " + props.provider());

@@ -1,6 +1,7 @@
-package com.recall.llm;
+package com.recall.llm.provider.openai;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -9,17 +10,35 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * OpenAI 임베딩 응답 JSON → 벡터 추출(vectorFrom)의 결정론 검증. 실제 HTTP 호출은 부팅 스모크로 확인하고, 여기선 파싱·차원검증만 본다(기존
- * {@link LlmResponseParsingTest} 와 같은 결).
+ * OpenAI 채팅 응답 → 텍스트(textFrom)·임베딩 응답 → 벡터(vectorFrom) 추출의 결정론 검증. 실제 HTTP 호출은 부팅 스모크로 확인하고, 여기선
+ * 파싱·차원검증만 본다.
  */
-class EmbeddingResponseParsingTest {
+class OpenAiClientsTest {
 
     private final ObjectMapper mapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     @Test
+    @DisplayName("OpenAI: choices[0].message.content를 뽑는다")
+    void openaiChat() throws Exception {
+        String json =
+                """
+                {"choices":[{"index":0,"message":{"role":"assistant","content":"응답 본문"}}]}
+                """;
+        var resp = mapper.readValue(json, OpenAiLlmClient.ChatResponse.class);
+        assertEquals("응답 본문", OpenAiLlmClient.textFrom(resp));
+    }
+
+    @Test
+    @DisplayName("OpenAI: choices가 비면 예외")
+    void openaiChatEmpty() throws Exception {
+        var resp = mapper.readValue("{\"choices\":[]}", OpenAiLlmClient.ChatResponse.class);
+        assertThrows(IllegalStateException.class, () -> OpenAiLlmClient.textFrom(resp));
+    }
+
+    @Test
     @DisplayName("OpenAI: data[0].embedding을 차원대로 뽑는다")
-    void openai() throws Exception {
+    void openaiEmbedding() throws Exception {
         String json =
                 """
                 {"data":[{"index":0,"embedding":[0.1,0.2,0.3]}],"model":"text-embedding-3-small"}
@@ -31,7 +50,7 @@ class EmbeddingResponseParsingTest {
 
     @Test
     @DisplayName("OpenAI: 차원이 기대와 다르면 예외(조용한 실패 금지)")
-    void openaiDimensionMismatch() throws Exception {
+    void openaiEmbeddingDimensionMismatch() throws Exception {
         String json =
                 """
                 {"data":[{"index":0,"embedding":[0.1,0.2,0.3]}]}
@@ -43,7 +62,7 @@ class EmbeddingResponseParsingTest {
 
     @Test
     @DisplayName("OpenAI: data가 비면 예외")
-    void openaiEmpty() throws Exception {
+    void openaiEmbeddingEmpty() throws Exception {
         var resp = mapper.readValue("{\"data\":[]}", OpenAiEmbeddingClient.EmbeddingResponse.class);
         assertThrows(
                 IllegalStateException.class, () -> OpenAiEmbeddingClient.vectorFrom(resp, 1024));

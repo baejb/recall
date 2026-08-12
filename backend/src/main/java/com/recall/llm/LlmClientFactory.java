@@ -1,5 +1,8 @@
 package com.recall.llm;
 
+import com.recall.llm.provider.anthropic.AnthropicLlmClient;
+import com.recall.llm.provider.google.GoogleLlmClient;
+import com.recall.llm.provider.openai.OpenAiLlmClient;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

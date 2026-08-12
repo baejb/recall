@@ -1,5 +1,8 @@
-package com.recall.llm;
+package com.recall.llm.provider.voyage;
 
+import com.recall.llm.EmbeddingClient;
+import com.recall.llm.EmbeddingProperties;
+import com.recall.llm.LlmConfig;
 import java.util.List;
 import org.springframework.web.client.RestClient;
 
