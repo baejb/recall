@@ -39,11 +39,16 @@ export function CapturePage() {
   }
 
   // StepProgress 애니메이션이 끝나면 실제로 서버에 저장한다. 서버가 마스킹·추출을 수행.
+  // submitCapture 내부에서 검토함에 새 항목이 뜰 때까지 짧게 폴링한다(비동기 처리 → P2:
+  // 즉시 이동하면 검토함이 비어 보이는 문제 방지). 폴링 중에도 이 화면의 "정리하는 중…"
+  // 스피너가 계속 보이므로 빈 화면·무한 스피너는 아니다.
   const finishExtract = async () => {
     if (!draft) return
     try {
-      await submitCapture(draft.text)
-      toast('✓ 검토함에 올렸어요')
+      const { found } = await submitCapture(draft.text)
+      // found=false면 타임아웃(10s) — 캡처 자체는 성공했으니 실패로 보이면 안 된다.
+      // 아직 검토함에 안 떴을 수 있음을 알리고, 조용히 넘어가지 않는다(조용한 실패 금지).
+      toast(found ? '✓ 검토함에 올렸어요' : '정리가 조금 더 걸려요 — 곧 검토함에 나타나요')
       navigate('/reviews')
     } catch (e) {
       // 조용한 실패 금지: 실패를 알리고 입력 화면으로 되돌린다.

@@ -2,12 +2,48 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { Memory, Review } from '../types'
 import * as api from '../api/client'
 import { toMemory, toReview } from '../api/adapter'
-import { RecallContext, type RecallStore } from './recallContext'
+import { RecallContext, type CaptureSubmitResult, type RecallStore } from './recallContext'
 
 interface Snapshot {
   memories: Memory[]
   reviews: Review[]
   reviewCount: number
+}
+
+// 캡처 저장 직후 폴링 파라미터. 서버가 마스킹→추출→판정을 비동기로 처리하므로 즉시
+// 새로고침하면 검토함이 비어 보인다(P2 버그). 짧은 간격으로 재확인해 그 창을 없앤다.
+const REVIEW_POLL_INTERVAL_MS = 700
+const REVIEW_POLL_TIMEOUT_MS = 10_000
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 새 captureId의 검토 항목이 나타날 때까지 짧게 재확인한다(최대 REVIEW_POLL_TIMEOUT_MS).
+ * 폴링 중 일시적 네트워크 오류는 예외로 던지지 않고 다음 시도로 넘어간다 — 캡처 POST는 이미
+ * 성공했으므로, 그 뒤 재확인 실패를 "저장 실패"로 오인시키면 안 된다(불변 원칙: 조용한 실패 금지
+ * 와는 별개로, 거짓 실패도 금지).
+ * @returns 마지막으로 성공한 스냅샷(한 번도 성공 못 했으면 null)과, 대상 항목을 찾았는지 여부.
+ */
+async function pollForReview(
+  fetchAll: () => Promise<Snapshot>,
+  captureId: string
+): Promise<{ snapshot: Snapshot | null; found: boolean }> {
+  const deadline = Date.now() + REVIEW_POLL_TIMEOUT_MS
+  let snapshot: Snapshot | null = null
+  let found = false
+  for (;;) {
+    try {
+      snapshot = await fetchAll()
+      found = snapshot.reviews.some((r) => r.captureId === captureId)
+    } catch {
+      // 무시하고 재시도(아래 deadline 체크로 결국 종료).
+    }
+    if (found || Date.now() >= deadline) break
+    await delay(REVIEW_POLL_INTERVAL_MS)
+  }
+  return { snapshot, found }
 }
 
 /** 실 백엔드 연동 Provider. 마운트 시 목록을 로드하고, 변경 후 새로고침한다. */
@@ -69,12 +105,22 @@ export function RecallProvider({ children }: { children: ReactNode }) {
   }, [fetchAll, apply])
 
   const submitCapture = useCallback(
-    async (rawText: string) => {
-      await api.createCapture(rawText)
-      // 서버가 비동기로 추출→검토함에 올린다. 잠시 뒤 새로고침해 반영.
-      await refresh()
+    async (rawText: string): Promise<CaptureSubmitResult> => {
+      const { captureId } = await api.createCapture(rawText)
+      const id = String(captureId)
+      // 서버가 비동기로 추출→검토함에 올린다(마스킹→LLM 추출→판정, 수 초 소요).
+      // 바로 새로고침하면 목록이 비어 보이므로(P2), 새 항목이 뜰 때까지 짧게 폴링한다.
+      const { snapshot, found } = await pollForReview(fetchAll, id)
+      if (snapshot) {
+        apply(snapshot)
+      } else {
+        // 폴링 내내 한 번도 성공적으로 못 읽었으면(네트워크 장애 등) 기존 refresh 경로로
+        // 한 번 더 시도 — 실패 시 error 상태로 노출된다(조용한 실패 금지).
+        await refresh()
+      }
+      return { captureId: id, found }
     },
-    [refresh]
+    [fetchAll, apply, refresh]
   )
 
   const approveReview = useCallback(
