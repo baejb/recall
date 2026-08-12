@@ -1,6 +1,7 @@
 package com.recall.settings;
 
 import com.recall.common.SecretCipher;
+import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import com.recall.settings.ProviderCatalog.Role;
@@ -15,16 +16,19 @@ public class SettingsService {
     private final SecretCipher cipher;
     private final EmbeddingProperties envEmbedding;
     private final LlmProperties envChat;
+    private final EmbeddingClientFactory embeddingFactory;
 
     public SettingsService(
             ModelSettingRepository repository,
             SecretCipher cipher,
             EmbeddingProperties envEmbedding,
-            LlmProperties envChat) {
+            LlmProperties envChat,
+            EmbeddingClientFactory embeddingFactory) {
         this.repository = repository;
         this.cipher = cipher;
         this.envEmbedding = envEmbedding;
         this.envChat = envChat;
+        this.embeddingFactory = embeddingFactory;
     }
 
     private ModelSetting row() {
@@ -35,7 +39,11 @@ public class SettingsService {
 
     @Transactional(readOnly = true)
     public EmbeddingProperties currentEmbedding() {
-        ModelSetting s = row();
+        return embeddingPropsFrom(row());
+    }
+
+    /** 행(row)의 현재 값으로 {@link EmbeddingProperties}를 구성한다(키는 복호화, 없으면 env 폴백). */
+    private EmbeddingProperties embeddingPropsFrom(ModelSetting s) {
         String key = decryptOr(s.getEmbeddingApiKeyEnc(), envEmbedding.apiKey());
         return new EmbeddingProperties(
                 s.getEmbeddingProvider(), key, s.getEmbeddingModel(), null, 1024);
@@ -82,7 +90,25 @@ public class SettingsService {
         }
         if (notBlank(u.embeddingApiKey())) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
 
+        if (embeddingChanged) {
+            probeEmbedding(embeddingPropsFrom(s));
+        }
+
         return new UpdateResult(embeddingChanged);
+    }
+
+    /**
+     * 저장 전 프로브(test-before-save) — 후보 임베딩 설정으로 실제 임베딩 1회를 시도해 유효성을 확인한다. 실패 시(잘못된 키/모델 등) {@link
+     * EmbeddingProbeException}을 던져 트랜잭션을 롤백시킨다. 키 값은 예외 메시지에 담지 않는다.
+     */
+    private void probeEmbedding(EmbeddingProperties candidate) {
+        try {
+            embeddingFactory.forSettings(candidate).embedDocument("probe");
+        } catch (EmbeddingProbeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new EmbeddingProbeException("임베딩 설정 검증 실패(키/모델 확인): " + e.getMessage());
+        }
     }
 
     private String encrypt(String plaintext) {

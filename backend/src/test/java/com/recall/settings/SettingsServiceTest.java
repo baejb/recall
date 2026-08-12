@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.recall.common.SecretCipher;
+import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import com.recall.settings.SettingsService.SettingsUpdate;
@@ -38,7 +39,8 @@ class SettingsServiceTest {
                         repo,
                         realCipher(),
                         new EmbeddingProperties("voyage", "", null, null, 1024),
-                        new LlmProperties("anthropic", "", null, null, 4096));
+                        new LlmProperties("anthropic", "", null, null, 4096),
+                        mock(EmbeddingClientFactory.class));
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
@@ -62,7 +64,8 @@ class SettingsServiceTest {
                         repo,
                         new SecretCipher(""), // 비활성
                         new EmbeddingProperties("voyage", "", null, null, 1024),
-                        new LlmProperties("anthropic", "", null, null, 4096));
+                        new LlmProperties("anthropic", "", null, null, 4096),
+                        mock(EmbeddingClientFactory.class));
         assertThrows(
                 IllegalStateException.class,
                 () -> svc.update(new SettingsUpdate(null, null, "sk-x", null, null, null)));
