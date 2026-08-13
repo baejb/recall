@@ -4,6 +4,7 @@ import type {
   CaptureResponse,
   CaptureStatusResponse,
   CatalogResponse,
+  MemoryDetailResponse,
   MemoryResponse,
   ReviewCountResponse,
   ReviewItemResponse,
@@ -29,6 +30,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getMemories(signal?: AbortSignal): Promise<MemoryResponse[]> {
   return request<MemoryResponse[]>('/memories', { signal })
+}
+
+/** GET /api/memories/{id} — 기억 단건 상세(구조화 필드 포함). 없으면 404 → request()가 예외로 던짐. */
+export function getMemoryDetail(
+  id: string | number,
+  signal?: AbortSignal
+): Promise<MemoryDetailResponse> {
+  return request<MemoryDetailResponse>(`/memories/${id}`, { signal })
 }
 
 export function getReviews(signal?: AbortSignal): Promise<ReviewItemResponse[]> {

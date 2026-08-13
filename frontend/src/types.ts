@@ -31,9 +31,12 @@ export interface TsFields {
   status: TsStatus
 }
 
-/** 지식 유형 필드. */
+/** 지식 유형 필드. content=document(원문 정리). summary/facts/keywords는 구조화 렌더용(선택). */
 export interface KnFields {
   content: string
+  summary?: string
+  facts?: string[]
+  keywords?: string[]
 }
 
 /** 승인된 기억 카드. 원문 1개에서 여러 개가 나올 수 있다(1:N). */

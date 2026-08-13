@@ -105,3 +105,17 @@ export interface KnowledgeCard {
   facts?: string[]
   document?: string
 }
+
+/** GET /api/memories/{id} — 기억 단건 상세(구조화 필드 포함). 없으면 404. */
+export interface MemoryDetailResponse {
+  id: number
+  captureId: number
+  type: string
+  title: string
+  summary: string | null
+  keywords: string[]
+  facts: string[]
+  document: string | null
+  status: string
+  createdAt: string
+}

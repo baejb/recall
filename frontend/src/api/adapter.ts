@@ -48,7 +48,12 @@ export function toReview(r: ReviewItemResponse): Review {
     type,
     title: card.title ?? '(제목 없음)',
     ts: { problem: content, tried: '', solution: '', status: '미해결' },
-    kn: { content },
+    kn: {
+      content: card.document ?? '',
+      summary: card.summary,
+      facts: card.facts ?? [],
+      keywords: card.keywords ?? [],
+    },
   }
   return { id: String(r.id), captureId: String(r.captureId), cards: [reviewCard] }
 }
