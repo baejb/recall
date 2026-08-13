@@ -38,14 +38,15 @@ function toForm(s: SettingsResponse): FormState {
   }
 }
 
-/** 로드된 값과 폼을 비교해 실제로 바뀐 것만 담는다. apiKey는 입력했을 때만. baseUrl은 공백/불변이면 생략(계약: 공백=변경없음). */
+/** 로드된 값과 폼을 비교해 실제로 바뀐 것만 담는다. apiKey는 입력했을 때만 담는다(빈값=유지 — 비밀은 빈 입력으로 지우지 않는다).
+ * baseUrl은 바뀌면 담는다 — 비우면 공백("")으로 보내 해제 신호(계약: 공백=provider 기본값으로 리셋). */
 function buildSectionUpdate(form: SectionForm, loaded: ModelSettings): ModelUpdate {
   const upd: ModelUpdate = {}
   if (form.provider !== loaded.provider) upd.provider = form.provider
   if (form.model !== loaded.model) upd.model = form.model
   if (form.apiKey.trim() !== '') upd.apiKey = form.apiKey
   const loadedBase = loaded.baseUrl ?? ''
-  if (form.baseUrl.trim() !== '' && form.baseUrl !== loadedBase) upd.baseUrl = form.baseUrl
+  if (form.baseUrl !== loadedBase) upd.baseUrl = form.baseUrl
   return upd
 }
 
