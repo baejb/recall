@@ -51,25 +51,45 @@ class SettingsFlowSmokeTest {
      */
     @MockitoBean private EmbeddingClientFactory embeddingClientFactory;
 
+    private String originalChatProvider;
+    private String originalChatModel;
     private String originalEmbeddingProvider;
     private String originalEmbeddingModel;
     private String originalEmbeddingStatus;
+    private long originalEmbeddingGeneration;
 
     @BeforeEach
-    void captureOriginalRow() {
+    void captureOriginalRowAndSetKnownBaseline() {
         when(embeddingClientFactory.forSettings(any())).thenReturn(new StubEmbeddingClient());
         ModelSetting s = repository.findById(1L).orElseThrow();
+        originalChatProvider = s.getChatProvider();
+        originalChatModel = s.getChatModel();
         originalEmbeddingProvider = s.getEmbeddingProvider();
         originalEmbeddingModel = s.getEmbeddingModel();
         originalEmbeddingStatus = s.getEmbeddingStatus();
+        originalEmbeddingGeneration = s.getEmbeddingGeneration();
+
+        // env(.env 의 RECALL_EMBEDDING_PROVIDER 등)에 의해 첫 부팅 시더가 이 행을 드리프트시킬 수
+        // 있으므로, 이 테스트가 검증하는 값(anthropic/voyage)으로 알려진 baseline 을 강제한다 —
+        // 이래야 테스트가 실행 환경(dev .env)과 무관하게 결정적으로 동작한다.
+        s.setChatProvider("anthropic");
+        s.setChatModel("claude-opus-4-8");
+        s.setEmbeddingProvider("voyage");
+        s.setEmbeddingModel(null);
+        s.setEmbeddingStatus("READY");
+        s.setEmbeddingGeneration(0L);
+        repository.save(s);
     }
 
     @AfterEach
     void restoreOriginalRow() {
         ModelSetting s = repository.findById(1L).orElseThrow();
+        s.setChatProvider(originalChatProvider);
+        s.setChatModel(originalChatModel);
         s.setEmbeddingProvider(originalEmbeddingProvider);
         s.setEmbeddingModel(originalEmbeddingModel);
         s.setEmbeddingStatus(originalEmbeddingStatus);
+        s.setEmbeddingGeneration(originalEmbeddingGeneration);
         repository.save(s);
     }
 
