@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useRecall } from '../hooks/useRecall'
+import { ThemeToggle } from './ThemeToggle'
 
 function navClass({ isActive }: { isActive: boolean }): string {
   return isActive ? 'nav active' : 'nav'
@@ -41,6 +42,7 @@ export function Sidebar() {
       </NavLink>
 
       <div className="spacer" />
+      <ThemeToggle />
       <div className="userchip">
         <div className="av">이</div>
         <div>
