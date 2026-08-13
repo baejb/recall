@@ -8,11 +8,13 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Google Gemini generateContent API 어댑터(BYO key). {@link LlmConfig}가 provider=google이고 키가 있을 때
- * 등록한다. 키는 쿼리 파라미터로 전달한다. 실패는 삼키지 않고 예외로 드러낸다(조용한 실패 금지).
+ * 등록한다. 키는 {@code x-goog-api-key} 헤더로 전달한다(URL 쿼리에 실으면 저수준 IO 예외 메시지에 요청 URI가 그대로 노출돼 키가 로그로 샐 수
+ * 있다). 실패는 삼키지 않고 예외로 드러낸다(조용한 실패 금지).
  */
 public class GoogleLlmClient implements LlmClient {
 
     static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
+    private static final String API_KEY_HEADER = "x-goog-api-key";
 
     private final LlmProperties props;
     private final RestClient restClient;
@@ -23,7 +25,11 @@ public class GoogleLlmClient implements LlmClient {
                 props.baseUrl() == null || props.baseUrl().isBlank()
                         ? DEFAULT_BASE_URL
                         : props.baseUrl();
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        this.restClient =
+                RestClient.builder()
+                        .baseUrl(baseUrl)
+                        .defaultHeader(API_KEY_HEADER, props.apiKey())
+                        .build();
     }
 
     @Override
@@ -31,10 +37,7 @@ public class GoogleLlmClient implements LlmClient {
         GenerateResponse body =
                 restClient
                         .post()
-                        .uri(
-                                "/v1beta/models/{model}:generateContent?key={key}",
-                                props.model(),
-                                props.apiKey())
+                        .uri("/v1beta/models/{model}:generateContent", props.model())
                         .body(
                                 new GenerateRequest(
                                         new SystemInstruction(List.of(new Part(systemPrompt))),

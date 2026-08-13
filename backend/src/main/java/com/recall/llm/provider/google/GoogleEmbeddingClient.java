@@ -8,16 +8,17 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Google Gemini embedContent API 어댑터(BYO key). {@link LlmConfig}가 provider=google이고 키가 있을 때 등록한다.
- * 키는 쿼리 파라미터로 전달한다.
+ * 키는 {@code x-goog-api-key} 헤더로 전달한다(URL 쿼리에 실으면 저수준 IO 예외 메시지에 요청 URI가 그대로 노출돼 키가 로그로 샐 수 있다).
  *
  * <p>{@code outputDimensionality}로 출력 차원을 {@code memory_embedding vector(1024)} 에 맞춰 요청한다(스키마 변경 없이
  * Voyage/OpenAI와 동일 차원 유지). Google embedContent는 input_type(document/query) 구분이 없어 저장·조회 임베딩이 동일하다.
- * 실패는 삼키지 않고 예외로 드러낸다(조용한 실패 금지). 키가 URL 쿼리에 실리므로 예외 메시지에 URL/키를 담지 않는다.
+ * 실패는 삼키지 않고 예외로 드러낸다(조용한 실패 금지).
  */
 public class GoogleEmbeddingClient implements EmbeddingClient {
 
     static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
     static final String DEFAULT_MODEL = "gemini-embedding-001";
+    private static final String API_KEY_HEADER = "x-goog-api-key";
 
     private final EmbeddingProperties props;
     private final String model;
@@ -31,7 +32,11 @@ public class GoogleEmbeddingClient implements EmbeddingClient {
                 props.baseUrl() == null || props.baseUrl().isBlank()
                         ? DEFAULT_BASE_URL
                         : props.baseUrl();
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        this.restClient =
+                RestClient.builder()
+                        .baseUrl(baseUrl)
+                        .defaultHeader(API_KEY_HEADER, props.apiKey())
+                        .build();
     }
 
     @Override
@@ -53,7 +58,7 @@ public class GoogleEmbeddingClient implements EmbeddingClient {
         EmbeddingResponse body =
                 restClient
                         .post()
-                        .uri("/v1beta/models/{model}:embedContent?key={key}", model, props.apiKey())
+                        .uri("/v1beta/models/{model}:embedContent", model)
                         .body(
                                 new EmbeddingRequest(
                                         "models/" + model,
