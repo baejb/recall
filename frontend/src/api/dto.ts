@@ -1,6 +1,6 @@
 // 백엔드 응답/요청 DTO 미러링(실연동 계약). 백엔드 com.recall.*.dto 와 1:1.
 
-/** GET /api/memories */
+/** GET /api/memories 의 items 요소 */
 export interface MemoryResponse {
   id: number
   captureId: number
@@ -9,6 +9,20 @@ export interface MemoryResponse {
   summary: string | null
   status: string // active | superseded | incorrect
   createdAt: string // ISO OffsetDateTime
+}
+
+/** 유형 탭 카운트(검색어가 걸리면 그 필터 기준). 첫 페이지 응답에만 실리고 이후 스크롤은 null. */
+export interface MemoryCounts {
+  total: number
+  ts: number
+  kn: number
+}
+
+/** GET /api/memories — 키셋 페이지네이션 한 페이지. nextCursor=null 이면 마지막. */
+export interface MemoryPage {
+  items: MemoryResponse[]
+  nextCursor: string | null
+  counts: MemoryCounts | null
 }
 
 /** GET /api/reviews */

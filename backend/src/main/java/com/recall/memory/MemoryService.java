@@ -2,12 +2,16 @@ package com.recall.memory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.common.MemoryType;
+import com.recall.memory.dto.MemoryCounts;
 import com.recall.memory.dto.MemoryDetailResponse;
+import com.recall.memory.dto.MemoryPageResponse;
 import com.recall.memory.dto.MemoryResponse;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +23,9 @@ public class MemoryService {
 
     private static final Logger log = LoggerFactory.getLogger(MemoryService.class);
 
+    private static final int DEFAULT_LIMIT = 20;
+    private static final int MAX_LIMIT = 50;
+
     private final MemoryRepository memoryRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -26,12 +33,81 @@ public class MemoryService {
         this.memoryRepository = memoryRepository;
     }
 
-    /** 활성 카드 목록(최신순). */
+    /**
+     * 활성 카드 한 페이지(키셋 페이지네이션). 최신순(created_at DESC · id DESC).
+     *
+     * @param q 제목 부분일치(대소문자 무시). 빈 값이면 필터 없음
+     * @param type 유형 필터 {@code ts|kn}. 빈 값이면 전체. 그 외 값은 400
+     * @param cursor 이전 페이지의 nextCursor. 빈 값이면 첫 페이지. 형식이 깨졌으면 400
+     * @param limit 페이지 크기(1~50, 기본 20)
+     */
     @Transactional(readOnly = true)
-    public List<MemoryResponse> listActive() {
-        return memoryRepository.findByStatusOrderByCreatedAtDesc("active").stream()
-                .map(MemoryService::toResponse)
-                .toList();
+    public MemoryPageResponse list(String q, String type, String cursor, int limit) {
+        int requested = limit <= 0 ? DEFAULT_LIMIT : limit;
+        int size = Math.min(Math.max(requested, 1), MAX_LIMIT);
+        MemoryType typeFilter = parseType(type);
+        // 빈 검색어는 "" 로 정규화한다 — LIKE '%%' 는 전체 매치라 null 분기가 필요 없고,
+        // null 파라미터의 타입 추론 실패(lower(bytea))도 피한다.
+        String qNorm = (q == null || q.isBlank()) ? "" : q.trim();
+        MemoryCursor cur = decodeCursor(cursor);
+
+        // limit+1 개를 요청해, 초과분 존재로 다음 페이지 유무를 한 번의 쿼리로 판단한다.
+        List<Memory> rows =
+                memoryRepository.findActivePage(
+                        typeFilter,
+                        qNorm,
+                        cur != null,
+                        cur == null ? null : cur.createdAt(),
+                        cur == null ? null : cur.id(),
+                        PageRequest.of(0, size + 1));
+
+        boolean hasMore = rows.size() > size;
+        List<Memory> page = hasMore ? rows.subList(0, size) : rows;
+        List<MemoryResponse> items = page.stream().map(MemoryService::toResponse).toList();
+
+        String nextCursor = null;
+        if (hasMore) {
+            Memory last = page.get(page.size() - 1);
+            nextCursor = new MemoryCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+
+        // 카운트는 첫 페이지(커서 없음)에서만 계산한다 — 스크롤마다 재계산하지 않는다(프론트가 첫 값을 유지).
+        MemoryCounts counts = null;
+        if (cur == null) {
+            counts =
+                    new MemoryCounts(
+                            memoryRepository.countActive(null, qNorm),
+                            memoryRepository.countActive(MemoryType.TROUBLESHOOTING, qNorm),
+                            memoryRepository.countActive(MemoryType.KNOWLEDGE, qNorm));
+        }
+        return new MemoryPageResponse(items, nextCursor, counts);
+    }
+
+    /**
+     * 프론트 유형 키(ts|kn) → MemoryType. 빈 값=필터 없음(null), 그 외=400. 외부 입력을 enum 으로 옮기는 경계 파싱이며, 유형별 비즈니스
+     * 분기(switch(MemoryType)) 가 아니다.
+     */
+    private static MemoryType parseType(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        return switch (type) {
+            case "ts" -> MemoryType.TROUBLESHOOTING;
+            case "kn" -> MemoryType.KNOWLEDGE;
+            default ->
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 type: " + type);
+        };
+    }
+
+    private static MemoryCursor decodeCursor(String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        try {
+            return MemoryCursor.decode(cursor);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 커서");
+        }
     }
 
     /** memory 상세 — structured(승인된 카드 JSON)를 펼쳐서 반환한다. 없는 id는 404. */

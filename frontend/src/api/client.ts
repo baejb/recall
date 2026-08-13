@@ -6,7 +6,7 @@ import type {
   CaptureStatusResponse,
   CatalogResponse,
   MemoryDetailResponse,
-  MemoryResponse,
+  MemoryPage,
   ReviewCountResponse,
   ReviewItemResponse,
   SettingsResponse,
@@ -29,8 +29,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T
 }
 
-export function getMemories(signal?: AbortSignal): Promise<MemoryResponse[]> {
-  return request<MemoryResponse[]>('/memories', { signal })
+/** 기억 목록 조회 파라미터. type 은 유형 필터(ts|kn), cursor 는 이전 페이지의 nextCursor. */
+export interface MemoryListParams {
+  q?: string
+  type?: 'ts' | 'kn'
+  cursor?: string
+  limit?: number
+}
+
+/** GET /api/memories — 키셋 페이지네이션. 파라미터 없으면 최신순 첫 페이지. */
+export function getMemories(
+  params: MemoryListParams = {},
+  signal?: AbortSignal
+): Promise<MemoryPage> {
+  const sp = new URLSearchParams()
+  if (params.q) sp.set('q', params.q)
+  if (params.type) sp.set('type', params.type)
+  if (params.cursor) sp.set('cursor', params.cursor)
+  if (params.limit) sp.set('limit', String(params.limit))
+  const qs = sp.toString()
+  return request<MemoryPage>(`/memories${qs ? `?${qs}` : ''}`, { signal })
 }
 
 /** GET /api/memories/{id} — 기억 단건 상세(구조화 필드 포함). 없으면 404 → request()가 예외로 던짐. */

@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { Memory, Review } from '../types'
+import type { Review } from '../types'
 
 /**
  * submitCapture 결과. 서버가 비동기로 검토 항목을 만들기 때문에, 폴링으로 실제로
@@ -16,16 +16,13 @@ export interface CaptureSubmitResult {
  * 백엔드 미지원(재발·상태변경·카드 편집/나누기·원본 조회)은 이 계약에서 제외한다(화면에서 비활성).
  */
 export interface RecallStore {
-  memories: Memory[]
   reviews: Review[]
   reviewCount: number
   loading: boolean
   error: string | null
 
-  /** memories·reviews·count를 서버에서 다시 로드. */
+  /** reviews·count를 서버에서 다시 로드(기억 목록은 useMemoryList가 페이지네이션으로 별도 로드). */
   refresh(): Promise<void>
-  /** 로드된 목록에서 단건 조회(단건 GET 엔드포인트가 없어 캐시로 조회). */
-  getMemory(id: string): Memory | undefined
   getReview(id: string): Review | undefined
 
   /**

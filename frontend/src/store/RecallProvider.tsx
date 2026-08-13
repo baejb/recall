@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Memory, Review } from '../types'
+import type { Review } from '../types'
 import * as api from '../api/client'
-import { toMemory, toReview } from '../api/adapter'
+import { toReview } from '../api/adapter'
 import { RecallContext, type CaptureSubmitResult, type RecallStore } from './recallContext'
 
+// 기억 목록은 더 이상 전역에 통째로 싣지 않는다(수천 건 대비). 목록 화면은 useMemoryList 가
+// 키셋 페이지네이션으로 직접 로드하고, 여기서는 검토함·건수만 다룬다.
 interface Snapshot {
-  memories: Memory[]
   reviews: Review[]
   reviewCount: number
 }
@@ -48,28 +49,21 @@ async function pollForReview(
 
 /** 실 백엔드 연동 Provider. 마운트 시 목록을 로드하고, 변경 후 새로고침한다. */
 export function RecallProvider({ children }: { children: ReactNode }) {
-  const [memories, setMemories] = useState<Memory[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
   const [reviewCount, setReviewCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // 서버 3종 목록을 병렬로 읽어 프론트 모델로 변환(setState 없음 — 순수 페칭).
+  // 검토함·건수를 병렬로 읽어 프론트 모델로 변환(setState 없음 — 순수 페칭).
   const fetchAll = useCallback(async (signal?: AbortSignal): Promise<Snapshot> => {
-    const [mem, rev, count] = await Promise.all([
-      api.getMemories(signal),
-      api.getReviews(signal),
-      api.getReviewCount(signal),
-    ])
+    const [rev, count] = await Promise.all([api.getReviews(signal), api.getReviewCount(signal)])
     return {
-      memories: mem.map(toMemory),
       reviews: rev.map(toReview),
       reviewCount: count.pending,
     }
   }, [])
 
   const apply = useCallback((s: Snapshot) => {
-    setMemories(s.memories)
     setReviews(s.reviews)
     setReviewCount(s.reviewCount)
   }, [])
@@ -142,29 +136,17 @@ export function RecallProvider({ children }: { children: ReactNode }) {
 
   const store = useMemo<RecallStore>(
     () => ({
-      memories,
       reviews,
       reviewCount,
       loading,
       error,
       refresh,
-      getMemory: (id) => memories.find((m) => m.id === id),
       getReview: (id) => reviews.find((r) => r.id === id),
       submitCapture,
       approveReview,
       rejectReview,
     }),
-    [
-      memories,
-      reviews,
-      reviewCount,
-      loading,
-      error,
-      refresh,
-      submitCapture,
-      approveReview,
-      rejectReview,
-    ]
+    [reviews, reviewCount, loading, error, refresh, submitCapture, approveReview, rejectReview]
   )
 
   return <RecallContext.Provider value={store}>{children}</RecallContext.Provider>

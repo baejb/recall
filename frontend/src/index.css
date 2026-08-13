@@ -371,6 +371,19 @@ img {
   height: 8px;
   border-radius: 50%;
 }
+button.type-tag {
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.type-tag:hover {
+  color: var(--text);
+}
+.type-tag.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
 
 .btn {
   font-family: inherit;
