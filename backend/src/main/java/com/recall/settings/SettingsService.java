@@ -1,11 +1,14 @@
 package com.recall.settings;
 
+import com.recall.common.BadRequestException;
 import com.recall.common.SecretCipher;
 import com.recall.common.SecretMasking;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import com.recall.settings.ProviderCatalog.Role;
+import java.util.List;
+import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,27 +86,63 @@ public class SettingsService {
         ModelSetting s = row();
         boolean reindexNeeded = false;
 
+        // base-url 오버라이드는 https 스킴만 허용(SSRF 여지 축소). null=변경 없음, ""=해제는 통과.
+        requireHttpsOrBlank(u.chatBaseUrl());
+        requireHttpsOrBlank(u.embeddingBaseUrl());
+
+        // ── chat ──
+        boolean chatProviderChanged =
+                u.chatProvider() != null && !u.chatProvider().equals(s.getChatProvider());
         if (u.chatProvider() != null) {
             catalog.requireSupported(Role.CHAT, u.chatProvider());
+            // P1-d: 옛 키는 옛 provider 것 — provider 교체 시 반드시 새 키를 받아야 한다.
+            // 없으면 옛 키+새 provider 조합으로 나중에 캡처 추출 등에서 조용히 실패한다.
+            if (chatProviderChanged && !notBlank(u.chatApiKey())) {
+                throw new BadRequestException("chat provider 변경에는 새 API 키가 필요합니다");
+            }
             s.setChatProvider(u.chatProvider());
         }
-        if (u.chatModel() != null) s.setChatModel(u.chatModel());
+        // 사용자가 준 모델이 이긴다. 미지정 + provider 변경이면 새 provider 기본 모델로 자동 설정.
+        if (u.chatModel() != null) {
+            s.setChatModel(u.chatModel());
+        } else if (chatProviderChanged) {
+            s.setChatModel(defaultModel(catalog.chatModels(), u.chatProvider()));
+        }
         if (notBlank(u.chatApiKey())) s.setChatApiKeyEnc(encrypt(u.chatApiKey()));
         // base-url 은 비밀이 아니다. null=변경 없음, ""=해제(null 로), 그 외=설정.
         if (u.chatBaseUrl() != null) s.setChatBaseUrl(blankToNull(u.chatBaseUrl()));
 
+        // ── embedding ──
+        boolean embeddingProviderChanged =
+                u.embeddingProvider() != null
+                        && !u.embeddingProvider().equals(s.getEmbeddingProvider());
         if (u.embeddingProvider() != null) {
             catalog.requireSupported(Role.EMBEDDING, u.embeddingProvider());
-            reindexNeeded |= !u.embeddingProvider().equals(s.getEmbeddingProvider());
+            reindexNeeded |= embeddingProviderChanged;
             s.setEmbeddingProvider(u.embeddingProvider());
         }
+        // chat 과 대칭: 모델 미지정 + provider 변경이면 새 provider 기본 임베딩 모델로 자동 설정
+        // (프로브가 provider+model 정합을 검증하도록).
         if (u.embeddingModel() != null) {
             reindexNeeded |= !u.embeddingModel().equals(s.getEmbeddingModel());
             s.setEmbeddingModel(u.embeddingModel());
+        } else if (embeddingProviderChanged) {
+            s.setEmbeddingModel(defaultModel(catalog.embeddingModels(), u.embeddingProvider()));
         }
         boolean embeddingKeyRotated = notBlank(u.embeddingApiKey());
         if (embeddingKeyRotated) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
         if (u.embeddingBaseUrl() != null) s.setEmbeddingBaseUrl(blankToNull(u.embeddingBaseUrl()));
+
+        // P1-b: 재색인은 기존 memory_embedding 을 전량 재작성한다. 유효 키가 없으면 팩토리가
+        // StubEmbeddingClient 를 반환해 프로브가 무의미하게 통과하고, 재색인이 기존 벡터를 0-벡터로
+        // 덮어써 검색이 조용히 망가진다. 재색인 전에 유효 임베딩 키를 강제해 그 경로를 막는다.
+        // (probe/REINDEXING/publish 이전이므로 @Transactional 이 롤백되어 아무 것도 파괴되지 않는다.)
+        if (reindexNeeded) {
+            String effectiveKey = decryptOr(s.getEmbeddingApiKeyEnc(), envEmbedding.apiKey());
+            if (!notBlank(effectiveKey)) {
+                throw new BadRequestException("임베딩 provider/모델 변경에는 유효한 API 키가 필요합니다 (기존 벡터 보호)");
+            }
+        }
 
         // 검증(probe)과 재색인은 별개다: provider/model 이 바뀌면 벡터 공간 자체가 달라져 재색인이
         // 필요하지만, 키만 회전(같은 provider+model)해도 오·타이핑된 키가 그대로 저장돼 나중에야
@@ -160,6 +199,18 @@ public class SettingsService {
 
     private static boolean notBlank(String v) {
         return v != null && !v.isBlank();
+    }
+
+    /** 비어 있지 않은 base-url 은 https 스킴만 허용한다(null=변경 없음, ""=해제는 통과). */
+    private static void requireHttpsOrBlank(String baseUrl) {
+        if (notBlank(baseUrl) && !baseUrl.startsWith("https://")) {
+            throw new BadRequestException("base URL 은 https 스킴만 허용됩니다");
+        }
+    }
+
+    /** provider 의 추천 모델 목록 첫 항목(=기본 모델). provider 는 requireSupported 로 검증돼 항목이 존재한다. */
+    private static String defaultModel(Map<String, List<String>> models, String provider) {
+        return models.get(provider).get(0);
     }
 
     /** DB 값이 있으면 그대로, 없으면(공백/널) env 폴백. 둘 다 공백이면 널이 되어 클라이언트가 provider 기본 URL 을 쓴다. */

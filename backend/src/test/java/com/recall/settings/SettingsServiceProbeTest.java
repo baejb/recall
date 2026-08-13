@@ -3,6 +3,7 @@ package com.recall.settings;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.recall.common.BadRequestException;
 import com.recall.common.SecretCipher;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.EmbeddingClientFactory;
@@ -52,6 +53,22 @@ class SettingsServiceProbeTest {
                 repo,
                 enabledCipher(),
                 new EmbeddingProperties("voyage", "sk-env-key", null, null, 1024),
+                new LlmProperties("anthropic", "", null, null, 4096),
+                factory,
+                realCatalog(),
+                publisher);
+    }
+
+    /** env 임베딩 키가 비어 있는 서비스 — P1-b(유효 키 없는 재색인 거부) 검증용. */
+    private SettingsService newServiceNoEnvEmbeddingKey(
+            ModelSettingRepository repo,
+            EmbeddingClientFactory factory,
+            ApplicationEventPublisher publisher)
+            throws Exception {
+        return new SettingsService(
+                repo,
+                enabledCipher(),
+                new EmbeddingProperties("voyage", "", null, null, 1024),
                 new LlmProperties("anthropic", "", null, null, 4096),
                 factory,
                 realCatalog(),
@@ -274,14 +291,204 @@ class SettingsServiceProbeTest {
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         SettingsService svc = newService(repo, factory, publisher);
 
+        // provider 교체는 P1-d 로 새 키를 요구하므로 키를 함께 전달 — 그래도 임베딩 프로브/재색인은 없다.
         UpdateResult result =
                 svc.update(
                         new SettingsUpdate(
-                                "openai", "gpt-4.1", null, null, null, null, null, null));
+                                "openai", "gpt-4.1", "sk-chat-new", null, null, null, null, null));
 
         verify(factory, never()).forSettings(any());
         verify(publisher, never()).publishEvent(any());
         assertFalse(result.embeddingChanged());
         assertEquals("READY", seed.getEmbeddingStatus());
+    }
+
+    // ── P1-d: chat provider 변경은 새 키를 요구하고 모델을 자동 기본값으로 맞춘다 ──
+
+    @Test
+    void chatProviderChangeWithoutKeyIsRejected() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, factory, publisher);
+
+        // 옛 키는 옛 provider(anthropic) 것 — provider 만 openai 로 바꾸면 400.
+        assertThrows(
+                BadRequestException.class,
+                () ->
+                        svc.update(
+                                new SettingsUpdate(
+                                        "openai", null, null, null, null, null, null, null)));
+
+        // 아무 것도 저장/발행되지 않는다(프로브도 없음).
+        verify(factory, never()).forSettings(any());
+        verify(publisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void chatProviderChangeWithoutModelUsesProviderDefault() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, factory, publisher);
+
+        UpdateResult result =
+                svc.update(
+                        new SettingsUpdate(
+                                "openai", null, "sk-chat-new", null, null, null, null, null));
+
+        // 모델 미지정 → 새 provider(openai)의 기본 모델로 자동 설정.
+        assertEquals("openai", seed.getChatProvider());
+        assertEquals("gpt-4.1", seed.getChatModel());
+
+        // chat 은 프로브·재색인이 없다.
+        verify(factory, never()).forSettings(any());
+        verify(publisher, never()).publishEvent(any());
+        assertFalse(result.embeddingChanged());
+    }
+
+    @Test
+    void chatProviderChangeWithModelUsesGivenModel() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, factory, publisher);
+
+        svc.update(
+                new SettingsUpdate(
+                        "openai", "gpt-4.1-mini", "sk-chat-new", null, null, null, null, null));
+
+        // 사용자가 준 모델이 기본값을 이긴다.
+        assertEquals("openai", seed.getChatProvider());
+        assertEquals("gpt-4.1-mini", seed.getChatModel());
+    }
+
+    // ── P1-b: 유효 키 없는 임베딩 provider/모델 변경은 기존 벡터를 지키기 위해 거부한다 ──
+
+    @Test
+    void embeddingChangeWithoutValidKeyIsRejectedAndVectorsProtected() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        // env 임베딩 키가 비어 있고 요청에도 키가 없음 → 유효 키 없음.
+        SettingsService svc = newServiceNoEnvEmbeddingKey(repo, factory, publisher);
+
+        assertThrows(
+                BadRequestException.class,
+                () ->
+                        svc.update(
+                                new SettingsUpdate(
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        "openai",
+                                        "text-embedding-3-small",
+                                        null,
+                                        null)));
+
+        // 파괴 경로(Stub 폴백 프로브 → 재색인)에 진입하지 않는다: 프로브 팩토리 미호출·미발행.
+        verify(factory, never()).forSettings(any());
+        verify(publisher, never()).publishEvent(any());
+        assertEquals("READY", seed.getEmbeddingStatus());
+    }
+
+    @Test
+    void embeddingProviderChangeWithKeyNoModelUsesDefaultAndReindexes() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        EmbeddingClient good = mock(EmbeddingClient.class);
+        when(good.embedDocument(anyString())).thenReturn(new float[1024]);
+        when(factory.forSettings(any())).thenReturn(good);
+
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, factory, publisher);
+
+        // provider 만 openai 로 바꾸고 유효 키를 함께 전달, 모델은 미지정.
+        UpdateResult result =
+                svc.update(
+                        new SettingsUpdate(
+                                null, null, null, null, "openai", null, "sk-emb-new", null));
+
+        // 모델 미지정 → 새 provider(openai)의 기본 임베딩 모델로 자동 설정(프로브가 정합 검증).
+        assertEquals("openai", seed.getEmbeddingProvider());
+        assertEquals("text-embedding-3-small", seed.getEmbeddingModel());
+
+        verify(factory).forSettings(any());
+        verify(good).embedDocument("probe");
+        verify(publisher).publishEvent(any(EmbeddingModelChangedEvent.class));
+        assertTrue(result.embeddingChanged());
+        assertEquals("REINDEXING", seed.getEmbeddingStatus());
+    }
+
+    // ── base-url https 스킴 검증 ──
+
+    @Test
+    void nonHttpsChatBaseUrlIsRejected() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        SettingsService svc =
+                newService(
+                        repo,
+                        mock(EmbeddingClientFactory.class),
+                        mock(ApplicationEventPublisher.class));
+
+        assertThrows(
+                BadRequestException.class,
+                () ->
+                        svc.update(
+                                new SettingsUpdate(
+                                        null,
+                                        null,
+                                        null,
+                                        "http://insecure",
+                                        null,
+                                        null,
+                                        null,
+                                        null)));
+    }
+
+    @Test
+    void nonHttpsEmbeddingBaseUrlIsRejected() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        SettingsService svc =
+                newService(
+                        repo,
+                        mock(EmbeddingClientFactory.class),
+                        mock(ApplicationEventPublisher.class));
+
+        assertThrows(
+                BadRequestException.class,
+                () ->
+                        svc.update(
+                                new SettingsUpdate(
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        "http://insecure")));
     }
 }
