@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
+import com.recall.common.SecretMasking;
 import com.recall.common.StrategyRegistry;
 import com.recall.llm.EmbeddingClient;
 import com.recall.memory.Memory;
@@ -95,7 +96,10 @@ public class ReviewService {
                             searchStore.saveEmbedding(
                                     memoryId, kind, embeddingClient.embedDocument(text)));
         } catch (RuntimeException e) {
-            log.warn("검색 인덱싱 실패(memory는 유지) memoryId={}: {}", memoryId, e.getMessage());
+            log.warn(
+                    "검색 인덱싱 실패(memory는 유지) memoryId={}: {}",
+                    memoryId,
+                    SecretMasking.mask(e.getMessage()));
         }
     }
 

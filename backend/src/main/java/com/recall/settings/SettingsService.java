@@ -1,6 +1,7 @@
 package com.recall.settings;
 
 import com.recall.common.SecretCipher;
+import com.recall.common.SecretMasking;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
@@ -8,6 +9,7 @@ import com.recall.settings.ProviderCatalog.Role;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientResponseException;
 
 /** 전역 모델 설정의 조회·변경. 키는 복호화해 클라이언트에 넘기고, 저장 시 암호화한다(없으면 env 폴백). */
 @Service
@@ -118,15 +120,23 @@ public class SettingsService {
 
     /**
      * 저장 전 프로브(test-before-save) — 후보 임베딩 설정으로 실제 임베딩 1회를 시도해 유효성을 확인한다. 실패 시(잘못된 키/모델 등) {@link
-     * EmbeddingProbeException}을 던져 트랜잭션을 롤백시킨다. 키 값은 예외 메시지에 담지 않는다.
+     * EmbeddingProbeException}을 던져 트랜잭션을 롤백시킨다. 키 값·provider 원문 응답 바디는 클라이언트 400 응답(detail)으로 그대로
+     * 나가지 않는다: HTTP 상태 예외는 상태코드+상태문구만 담고, 그 외는 {@link SecretMasking#mask(String)}으로 방어적 마스킹한 뒤 담는다.
      */
     private void probeEmbedding(EmbeddingProperties candidate) {
         try {
             embeddingFactory.forSettings(candidate).embedDocument("probe");
         } catch (EmbeddingProbeException e) {
             throw e;
+        } catch (RestClientResponseException e) {
+            throw new EmbeddingProbeException(
+                    "임베딩 설정 검증 실패(키/모델 확인): HTTP "
+                            + e.getStatusCode().value()
+                            + " "
+                            + e.getStatusText());
         } catch (Exception e) {
-            throw new EmbeddingProbeException("임베딩 설정 검증 실패(키/모델 확인): " + e.getMessage());
+            throw new EmbeddingProbeException(
+                    SecretMasking.mask("임베딩 설정 검증 실패(키/모델 확인): " + e.getMessage()));
         }
     }
 

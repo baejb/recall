@@ -15,12 +15,15 @@ import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.SettingsService.SettingsUpdate;
 import com.recall.settings.SettingsService.UpdateResult;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.RestClientResponseException;
 
 class SettingsServiceProbeTest {
 
@@ -159,6 +162,92 @@ class SettingsServiceProbeTest {
         verify(publisher).publishEvent(any(EmbeddingModelChangedEvent.class));
         assertTrue(result.embeddingChanged());
         assertEquals("REINDEXING", seed.getEmbeddingStatus());
+    }
+
+    @Test
+    void probeFailureFromHttpErrorReportsStatusOnlyNotBody() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        // provider가 HTTP 401을 던지되, (일부 런타임/버전에서는) 예외 메시지 자체에 응답 바디·키가
+        // 실릴 수 있다고 가정 — 이 바디/메시지가 클라이언트로 그대로 흘러나가면 안 되고, 상태코드
+        // +상태문구만 담아야 한다.
+        String fakeKey = "AIzaFAKEKEY123456";
+        byte[] body =
+                ("{\"error\":{\"message\":\"API key not valid: " + fakeKey + "\"}}")
+                        .getBytes(StandardCharsets.UTF_8);
+        String rawMessageWithBody =
+                "401 Unauthorized: [{\"error\":{\"message\":\"API key not valid: "
+                        + fakeKey
+                        + "\"}}]";
+        RestClientResponseException httpError =
+                new RestClientResponseException(
+                        rawMessageWithBody,
+                        HttpStatus.UNAUTHORIZED,
+                        "Unauthorized",
+                        null,
+                        body,
+                        StandardCharsets.UTF_8);
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        EmbeddingClient bad = mock(EmbeddingClient.class);
+        when(bad.embedDocument(anyString())).thenThrow(httpError);
+        when(factory.forSettings(any())).thenReturn(bad);
+
+        SettingsService svc = newService(repo, factory, mock(ApplicationEventPublisher.class));
+
+        EmbeddingProbeException ex =
+                assertThrows(
+                        EmbeddingProbeException.class,
+                        () ->
+                                svc.update(
+                                        new SettingsUpdate(
+                                                null,
+                                                null,
+                                                null,
+                                                "openai",
+                                                "text-embedding-3-small",
+                                                null)));
+
+        assertFalse(ex.getMessage().contains(fakeKey));
+        assertFalse(ex.getMessage().contains(httpError.getResponseBodyAsString()));
+        assertTrue(ex.getMessage().contains("401"));
+    }
+
+    @Test
+    void probeFailureFromGenericExceptionMasksKeyInMessage() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        // HTTP 상태 예외가 아닌 저수준 예외(예: RestClient가 요청 URI를 메시지에 그대로 담는 IO
+        // 오류)의 메시지에 키가 섞여 나오는 경우도 방어적으로 마스킹돼야 한다.
+        String fakeUrl =
+                "https://generativelanguage.googleapis.com/v1beta/models/x:embedContent?key=AIzaFAKEKEY123456";
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        EmbeddingClient bad = mock(EmbeddingClient.class);
+        when(bad.embedDocument(anyString()))
+                .thenThrow(
+                        new RuntimeException("I/O error on POST request for \"" + fakeUrl + "\""));
+        when(factory.forSettings(any())).thenReturn(bad);
+
+        SettingsService svc = newService(repo, factory, mock(ApplicationEventPublisher.class));
+
+        EmbeddingProbeException ex =
+                assertThrows(
+                        EmbeddingProbeException.class,
+                        () ->
+                                svc.update(
+                                        new SettingsUpdate(
+                                                null,
+                                                null,
+                                                null,
+                                                "openai",
+                                                "text-embedding-3-small",
+                                                null)));
+
+        assertFalse(ex.getMessage().contains("AIzaFAKEKEY123456"));
     }
 
     @Test
