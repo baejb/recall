@@ -1,7 +1,9 @@
 package com.recall.settings;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -18,6 +20,7 @@ import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -148,6 +151,63 @@ class SettingsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.chat.provider").value("openai"))
                 .andExpect(jsonPath("$.chat.apiKeyConfigured").value(true));
+    }
+
+    @Test
+    void getExposesBaseUrlButNeverRawKey() throws Exception {
+        when(settingsService.currentChat())
+                .thenReturn(
+                        new LlmProperties(
+                                "openai", SECRET_KEY, "gpt-4.1", "https://proxy.example", 4096));
+        when(settingsService.currentEmbedding())
+                .thenReturn(
+                        new EmbeddingProperties(
+                                "openai",
+                                SECRET_KEY,
+                                "text-embedding-3-small",
+                                "https://emb.example",
+                                1024));
+        when(settingsService.embeddingStatus()).thenReturn("READY");
+
+        String body =
+                mockMvc.perform(get("/api/settings/models"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.chat.baseUrl").value("https://proxy.example"))
+                        .andExpect(jsonPath("$.embedding.baseUrl").value("https://emb.example"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        assertFalse(body.contains(SECRET_KEY), "base-url 을 노출해도 API 키 평문은 담기지 않는다");
+    }
+
+    @Test
+    void putThreadsBaseUrlIntoUpdate() throws Exception {
+        when(settingsService.update(any())).thenReturn(new SettingsService.UpdateResult(false));
+        when(settingsService.currentChat())
+                .thenReturn(
+                        new LlmProperties(
+                                "openai", SECRET_KEY, "gpt-4.1", "https://proxy.example", 4096));
+        when(settingsService.currentEmbedding())
+                .thenReturn(new EmbeddingProperties("voyage", SECRET_KEY, "voyage-3", null, 1024));
+        when(settingsService.embeddingStatus()).thenReturn("READY");
+
+        String requestBody =
+                """
+                { "chat": {"provider": "openai", "model": "gpt-4.1", "apiKey": null, "baseUrl": "https://proxy.example"} }
+                """;
+
+        mockMvc.perform(
+                        put("/api/settings/models")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chat.baseUrl").value("https://proxy.example"));
+
+        ArgumentCaptor<SettingsService.SettingsUpdate> captor =
+                ArgumentCaptor.forClass(SettingsService.SettingsUpdate.class);
+        verify(settingsService).update(captor.capture());
+        assertEquals("https://proxy.example", captor.getValue().chatBaseUrl());
     }
 
     @Test

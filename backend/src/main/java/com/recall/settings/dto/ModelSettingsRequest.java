@@ -6,7 +6,7 @@ package com.recall.settings.dto;
  */
 public record ModelSettingsRequest(ChatReq chat, EmbeddingReq embedding) {
 
-    public record ChatReq(String provider, String model, String apiKey) {}
+    public record ChatReq(String provider, String model, String apiKey, String baseUrl) {}
 
-    public record EmbeddingReq(String provider, String model, String apiKey) {}
+    public record EmbeddingReq(String provider, String model, String apiKey, String baseUrl) {}
 }

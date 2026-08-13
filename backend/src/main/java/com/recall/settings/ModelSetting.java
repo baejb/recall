@@ -23,6 +23,9 @@ public class ModelSetting {
     @Column(name = "chat_api_key_enc")
     private String chatApiKeyEnc;
 
+    @Column(name = "chat_base_url")
+    private String chatBaseUrl;
+
     @Column(name = "embedding_provider", nullable = false)
     private String embeddingProvider;
 
@@ -32,8 +35,14 @@ public class ModelSetting {
     @Column(name = "embedding_api_key_enc")
     private String embeddingApiKeyEnc;
 
+    @Column(name = "embedding_base_url")
+    private String embeddingBaseUrl;
+
     @Column(name = "embedding_status", nullable = false)
     private String embeddingStatus;
+
+    @Column(name = "configured", nullable = false)
+    private boolean configured;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
@@ -69,6 +78,14 @@ public class ModelSetting {
         this.chatApiKeyEnc = v;
     }
 
+    public String getChatBaseUrl() {
+        return chatBaseUrl;
+    }
+
+    public void setChatBaseUrl(String v) {
+        this.chatBaseUrl = v;
+    }
+
     public String getEmbeddingProvider() {
         return embeddingProvider;
     }
@@ -93,11 +110,27 @@ public class ModelSetting {
         this.embeddingApiKeyEnc = v;
     }
 
+    public String getEmbeddingBaseUrl() {
+        return embeddingBaseUrl;
+    }
+
+    public void setEmbeddingBaseUrl(String v) {
+        this.embeddingBaseUrl = v;
+    }
+
     public String getEmbeddingStatus() {
         return embeddingStatus;
     }
 
     public void setEmbeddingStatus(String v) {
         this.embeddingStatus = v;
+    }
+
+    public boolean isConfigured() {
+        return configured;
+    }
+
+    public void setConfigured(boolean v) {
+        this.configured = v;
     }
 }

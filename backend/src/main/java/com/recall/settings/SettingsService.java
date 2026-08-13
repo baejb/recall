@@ -54,16 +54,18 @@ public class SettingsService {
     /** 행(row)의 현재 값으로 {@link EmbeddingProperties}를 구성한다(키는 복호화, 없으면 env 폴백). */
     private EmbeddingProperties embeddingPropsFrom(ModelSetting s) {
         String key = decryptOr(s.getEmbeddingApiKeyEnc(), envEmbedding.apiKey());
+        String baseUrl = baseUrlOr(s.getEmbeddingBaseUrl(), envEmbedding.baseUrl());
         return new EmbeddingProperties(
-                s.getEmbeddingProvider(), key, s.getEmbeddingModel(), null, 1024);
+                s.getEmbeddingProvider(), key, s.getEmbeddingModel(), baseUrl, 1024);
     }
 
     @Transactional(readOnly = true)
     public LlmProperties currentChat() {
         ModelSetting s = row();
         String key = decryptOr(s.getChatApiKeyEnc(), envChat.apiKey());
+        String baseUrl = baseUrlOr(s.getChatBaseUrl(), envChat.baseUrl());
         return new LlmProperties(
-                s.getChatProvider(), key, s.getChatModel(), null, envChat.maxTokens());
+                s.getChatProvider(), key, s.getChatModel(), baseUrl, envChat.maxTokens());
     }
 
     @Transactional(readOnly = true)
@@ -87,6 +89,8 @@ public class SettingsService {
         }
         if (u.chatModel() != null) s.setChatModel(u.chatModel());
         if (notBlank(u.chatApiKey())) s.setChatApiKeyEnc(encrypt(u.chatApiKey()));
+        // base-url 은 비밀이 아니다. null=변경 없음, ""=해제(null 로), 그 외=설정.
+        if (u.chatBaseUrl() != null) s.setChatBaseUrl(blankToNull(u.chatBaseUrl()));
 
         if (u.embeddingProvider() != null) {
             catalog.requireSupported(Role.EMBEDDING, u.embeddingProvider());
@@ -99,6 +103,7 @@ public class SettingsService {
         }
         boolean embeddingKeyRotated = notBlank(u.embeddingApiKey());
         if (embeddingKeyRotated) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
+        if (u.embeddingBaseUrl() != null) s.setEmbeddingBaseUrl(blankToNull(u.embeddingBaseUrl()));
 
         // 검증(probe)과 재색인은 별개다: provider/model 이 바뀌면 벡터 공간 자체가 달라져 재색인이
         // 필요하지만, 키만 회전(같은 provider+model)해도 오·타이핑된 키가 그대로 저장돼 나중에야
@@ -157,13 +162,24 @@ public class SettingsService {
         return v != null && !v.isBlank();
     }
 
+    /** DB 값이 있으면 그대로, 없으면(공백/널) env 폴백. 둘 다 공백이면 널이 되어 클라이언트가 provider 기본 URL 을 쓴다. */
+    private static String baseUrlOr(String dbVal, String envVal) {
+        return notBlank(dbVal) ? dbVal : envVal;
+    }
+
+    private static String blankToNull(String v) {
+        return notBlank(v) ? v : null;
+    }
+
     public record SettingsUpdate(
             String chatProvider,
             String chatModel,
             String chatApiKey,
+            String chatBaseUrl,
             String embeddingProvider,
             String embeddingModel,
-            String embeddingApiKey) {}
+            String embeddingApiKey,
+            String embeddingBaseUrl) {}
 
     /**
      * @param embeddingChanged 재색인이 트리거됨(REINDEXING 전이 발생) — 임베딩 키만 회전한 경우는 false.

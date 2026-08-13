@@ -56,11 +56,13 @@ public class SettingsController {
         EmbeddingProperties embedding = settingsService.currentEmbedding();
         String status = settingsService.embeddingStatus();
         return new ModelSettingsResponse(
-                new ChatSlot(chat.provider(), chat.model(), notBlank(chat.apiKey())),
+                new ChatSlot(
+                        chat.provider(), chat.model(), notBlank(chat.apiKey()), chat.baseUrl()),
                 new EmbeddingSlot(
                         embedding.provider(),
                         embedding.model(),
                         notBlank(embedding.apiKey()),
+                        embedding.baseUrl(),
                         status));
     }
 
@@ -71,9 +73,11 @@ public class SettingsController {
                 chat == null ? null : chat.provider(),
                 chat == null ? null : chat.model(),
                 chat == null ? null : chat.apiKey(),
+                chat == null ? null : chat.baseUrl(),
                 embedding == null ? null : embedding.provider(),
                 embedding == null ? null : embedding.model(),
-                embedding == null ? null : embedding.apiKey());
+                embedding == null ? null : embedding.apiKey(),
+                embedding == null ? null : embedding.baseUrl());
     }
 
     private static boolean notBlank(String v) {

@@ -72,9 +72,11 @@ class SettingsServiceTest {
                                         null,
                                         null,
                                         null,
+                                        null,
                                         "anthropic",
                                         "x",
-                                        "k"))); // 임베딩=anthropic 불가
+                                        "k",
+                                        null))); // 임베딩=anthropic 불가
     }
 
     @Test
@@ -93,6 +95,66 @@ class SettingsServiceTest {
                         mock(ApplicationEventPublisher.class));
         assertThrows(
                 IllegalStateException.class,
-                () -> svc.update(new SettingsUpdate(null, null, "sk-x", null, null, null)));
+                () ->
+                        svc.update(
+                                new SettingsUpdate(
+                                        null, null, "sk-x", null, null, null, null, null)));
+    }
+
+    @Test
+    void currentChatUsesDbBaseUrlWhenSetElseEnv() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting row = new ModelSetting();
+        row.setChatProvider("anthropic");
+        row.setChatModel("claude-opus-4-8");
+        row.setEmbeddingProvider("voyage");
+        row.setEmbeddingStatus("READY");
+        when(repo.findById(1L)).thenReturn(java.util.Optional.of(row));
+        SettingsService svc =
+                new SettingsService(
+                        repo,
+                        realCipher(),
+                        new EmbeddingProperties("voyage", "", null, "https://env-emb", 1024),
+                        new LlmProperties("anthropic", "", null, "https://env-chat", 4096),
+                        mock(EmbeddingClientFactory.class),
+                        realCatalog(),
+                        mock(ApplicationEventPublisher.class));
+
+        // DB 값 없음 → env 폴백
+        assertEquals("https://env-chat", svc.currentChat().baseUrl());
+        assertEquals("https://env-emb", svc.currentEmbedding().baseUrl());
+
+        // DB 값 설정 → DB 우선
+        row.setChatBaseUrl("https://db-chat");
+        row.setEmbeddingBaseUrl("https://db-emb");
+        assertEquals("https://db-chat", svc.currentChat().baseUrl());
+        assertEquals("https://db-emb", svc.currentEmbedding().baseUrl());
+    }
+
+    @Test
+    void updatePersistsChatBaseUrlAndClearsWithBlank() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting row = new ModelSetting();
+        row.setChatProvider("anthropic");
+        row.setChatModel("claude-opus-4-8");
+        row.setEmbeddingProvider("voyage");
+        row.setEmbeddingStatus("READY");
+        when(repo.findById(1L)).thenReturn(java.util.Optional.of(row));
+        SettingsService svc =
+                new SettingsService(
+                        repo,
+                        realCipher(),
+                        new EmbeddingProperties("voyage", "", null, null, 1024),
+                        new LlmProperties("anthropic", "", null, null, 4096),
+                        mock(EmbeddingClientFactory.class),
+                        realCatalog(),
+                        mock(ApplicationEventPublisher.class));
+
+        svc.update(new SettingsUpdate(null, null, null, "https://db-chat", null, null, null, null));
+        assertEquals("https://db-chat", row.getChatBaseUrl());
+
+        // 빈 문자열 = 해제(null)
+        svc.update(new SettingsUpdate(null, null, null, "", null, null, null, null));
+        assertNull(row.getChatBaseUrl());
     }
 }

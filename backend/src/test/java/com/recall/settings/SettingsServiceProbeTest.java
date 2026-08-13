@@ -98,8 +98,10 @@ class SettingsServiceProbeTest {
                                         null,
                                         null,
                                         null,
+                                        null,
                                         "openai",
                                         "text-embedding-3-small",
+                                        null,
                                         null))); // 임베딩 provider 변경 → 프로브 실패
 
         // 프로브가 실제로 호출됐는지 확인
@@ -126,7 +128,8 @@ class SettingsServiceProbeTest {
 
         // provider/model 은 그대로(null), 임베딩 키만 회전.
         UpdateResult result =
-                svc.update(new SettingsUpdate(null, null, null, null, null, "sk-rotated"));
+                svc.update(
+                        new SettingsUpdate(null, null, null, null, null, null, "sk-rotated", null));
 
         // 키만 바뀌어도 새 키가 유효한지 프로브는 반드시 돈다.
         verify(factory).forSettings(any());
@@ -155,7 +158,14 @@ class SettingsServiceProbeTest {
         UpdateResult result =
                 svc.update(
                         new SettingsUpdate(
-                                null, null, null, "openai", "text-embedding-3-small", null));
+                                null,
+                                null,
+                                null,
+                                null,
+                                "openai",
+                                "text-embedding-3-small",
+                                null,
+                                null));
 
         verify(factory).forSettings(any());
         verify(good).embedDocument("probe");
@@ -206,8 +216,10 @@ class SettingsServiceProbeTest {
                                                 null,
                                                 null,
                                                 null,
+                                                null,
                                                 "openai",
                                                 "text-embedding-3-small",
+                                                null,
                                                 null)));
 
         assertFalse(ex.getMessage().contains(fakeKey));
@@ -243,8 +255,10 @@ class SettingsServiceProbeTest {
                                                 null,
                                                 null,
                                                 null,
+                                                null,
                                                 "openai",
                                                 "text-embedding-3-small",
+                                                null,
                                                 null)));
 
         assertFalse(ex.getMessage().contains("AIzaFAKEKEY123456"));
@@ -261,7 +275,9 @@ class SettingsServiceProbeTest {
         SettingsService svc = newService(repo, factory, publisher);
 
         UpdateResult result =
-                svc.update(new SettingsUpdate("openai", "gpt-4.1", null, null, null, null));
+                svc.update(
+                        new SettingsUpdate(
+                                "openai", "gpt-4.1", null, null, null, null, null, null));
 
         verify(factory, never()).forSettings(any());
         verify(publisher, never()).publishEvent(any());
