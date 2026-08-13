@@ -116,7 +116,9 @@ class SettingsControllerTest {
     @Test
     void putSurfacesProbeFailureAs400() throws Exception {
         when(settingsService.update(any()))
-                .thenThrow(new EmbeddingProbeException("임베딩 설정 검증 실패(키/모델 확인): 401 unauthorized"));
+                .thenThrow(
+                        new EmbeddingProbeException(
+                                "임베딩 설정 검증 실패(키·모델·base URL 확인): 401 unauthorized"));
 
         String requestBody =
                 """

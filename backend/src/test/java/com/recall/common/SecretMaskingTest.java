@@ -40,7 +40,7 @@ class SecretMaskingTest {
     @Test
     @DisplayName("키가 없는 평범한 텍스트는 그대로 둔다")
     void leavesNormalTextIntact() {
-        String text = "임베딩 설정 검증 실패(키/모델 확인): HTTP 401 Unauthorized";
+        String text = "임베딩 설정 검증 실패(키·모델·base URL 확인): HTTP 401 Unauthorized";
         assertEquals(text, SecretMasking.mask(text));
     }
 }

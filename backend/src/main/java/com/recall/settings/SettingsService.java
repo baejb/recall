@@ -177,13 +177,13 @@ public class SettingsService {
             throw e;
         } catch (RestClientResponseException e) {
             throw new EmbeddingProbeException(
-                    "임베딩 설정 검증 실패(키/모델 확인): HTTP "
+                    "임베딩 설정 검증 실패(키·모델·base URL 확인): HTTP "
                             + e.getStatusCode().value()
                             + " "
                             + e.getStatusText());
         } catch (Exception e) {
             throw new EmbeddingProbeException(
-                    SecretMasking.mask("임베딩 설정 검증 실패(키/모델 확인): " + e.getMessage()));
+                    SecretMasking.mask("임베딩 설정 검증 실패(키·모델·base URL 확인): " + e.getMessage()));
         }
     }
 
