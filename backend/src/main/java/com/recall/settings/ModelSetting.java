@@ -41,6 +41,9 @@ public class ModelSetting {
     @Column(name = "embedding_status", nullable = false)
     private String embeddingStatus;
 
+    @Column(name = "embedding_generation", nullable = false)
+    private long embeddingGeneration;
+
     @Column(name = "configured", nullable = false)
     private boolean configured;
 
@@ -124,6 +127,14 @@ public class ModelSetting {
 
     public void setEmbeddingStatus(String v) {
         this.embeddingStatus = v;
+    }
+
+    public long getEmbeddingGeneration() {
+        return embeddingGeneration;
+    }
+
+    public void setEmbeddingGeneration(long v) {
+        this.embeddingGeneration = v;
     }
 
     public boolean isConfigured() {

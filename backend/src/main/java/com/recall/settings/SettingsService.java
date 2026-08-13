@@ -153,10 +153,13 @@ public class SettingsService {
         }
 
         if (reindexNeeded) {
-            // 프로브 성공 후에만 재색인 트리거. REINDEXING 을 이 트랜잭션에 함께 커밋하고,
-            // 재색인은 AFTER_COMMIT 이벤트 수신자(ReindexService)가 배경에서 수행한다(순환 회피).
+            // 프로브 성공 후에만 재색인 트리거. 세대(generation)를 1 증가시켜 REINDEXING 과 함께 이 트랜잭션에
+            // 커밋한다(gen + REINDEXING 동시 커밋). 재색인은 AFTER_COMMIT 이벤트 수신자(ReindexService)가
+            // 배경에서 수행하며, 이 세대 토큰을 들고 돌아 뒤늦은 앞선 잡의 상태 덮어쓰기를 막는다(순환 회피).
+            long gen = s.getEmbeddingGeneration() + 1;
+            s.setEmbeddingGeneration(gen);
             setEmbeddingStatus("REINDEXING");
-            publisher.publishEvent(new EmbeddingModelChangedEvent());
+            publisher.publishEvent(new EmbeddingModelChangedEvent(gen));
         }
 
         return new UpdateResult(reindexNeeded);
@@ -208,9 +211,14 @@ public class SettingsService {
         }
     }
 
-    /** provider 의 추천 모델 목록 첫 항목(=기본 모델). provider 는 requireSupported 로 검증돼 항목이 존재한다. */
+    /**
+     * provider 의 추천 모델 목록 첫 항목(=기본 모델). provider 는 requireSupported 로 검증돼 항목이 존재한다.
+     *
+     * <p>{@link ProviderCatalog}가 provider 키를 소문자로 색인하므로 여기서도 {@code toLowerCase()}로 조회한다(대소문자
+     * 혼용이지만 지원되는 provider 에서 잠재 NPE 방지).
+     */
     private static String defaultModel(Map<String, List<String>> models, String provider) {
-        return models.get(provider).get(0);
+        return models.get(provider.toLowerCase()).get(0);
     }
 
     /** DB 값이 있으면 그대로, 없으면(공백/널) env 폴백. 둘 다 공백이면 널이 되어 클라이언트가 provider 기본 URL 을 쓴다. */

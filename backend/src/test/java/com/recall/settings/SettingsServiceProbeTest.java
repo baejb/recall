@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClientResponseException;
@@ -490,5 +491,51 @@ class SettingsServiceProbeTest {
                                         null,
                                         null,
                                         "http://insecure")));
+    }
+
+    // ── 재색인 세대(generation) 토큰 (P1-c) ──
+
+    @Test
+    void reindexTriggeringChangeIncrementsGenerationAndPublishesIt() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        seed.setEmbeddingGeneration(4L);
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
+        EmbeddingClient good = mock(EmbeddingClient.class);
+        when(good.embedDocument(anyString())).thenReturn(new float[1024]);
+        when(factory.forSettings(any())).thenReturn(good);
+
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, factory, publisher);
+
+        svc.update(new SettingsUpdate(null, null, null, null, "openai", null, "sk-emb-new", null));
+
+        // 세대는 1 증가하고, 발행된 이벤트가 그 새 값을 실어야 한다(gen + REINDEXING 동시 커밋).
+        assertEquals(5L, seed.getEmbeddingGeneration());
+        ArgumentCaptor<EmbeddingModelChangedEvent> captor =
+                ArgumentCaptor.forClass(EmbeddingModelChangedEvent.class);
+        verify(publisher).publishEvent(captor.capture());
+        assertEquals(5L, captor.getValue().generation());
+        assertEquals("REINDEXING", seed.getEmbeddingStatus());
+    }
+
+    @Test
+    void nonReindexChangeDoesNotTouchGenerationOrPublish() throws Exception {
+        ModelSettingRepository repo = mock(ModelSettingRepository.class);
+        ModelSetting seed = seedRow();
+        seed.setEmbeddingGeneration(4L);
+        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        SettingsService svc = newService(repo, mock(EmbeddingClientFactory.class), publisher);
+
+        // chat base-url 만 변경 — 임베딩 재색인과 무관.
+        svc.update(new SettingsUpdate(null, null, null, "https://db-chat", null, null, null, null));
+
+        assertEquals(4L, seed.getEmbeddingGeneration());
+        verify(publisher, never()).publishEvent(any());
+        assertEquals("READY", seed.getEmbeddingStatus());
     }
 }
