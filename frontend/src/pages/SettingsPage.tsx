@@ -140,9 +140,12 @@ function ModelSection(props: ModelSectionProps) {
       <input
         type="url"
         value={form.baseUrl}
-        placeholder="https://…"
+        placeholder="예: https://api.openai.com/v1 (보통 비워두면 됨)"
         onChange={(e) => onBaseUrlChange(e.target.value)}
       />
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+        엔드포인트 경로 전까지 · 비우면 provider 기본값
+      </p>
 
       {warning && (
         <p style={{ fontSize: 12.5, color: 'var(--warn)', margin: '10px 0 0' }}>{warning}</p>
@@ -157,6 +160,7 @@ export function SettingsPage() {
   const [form, setForm] = useState<FormState | null>(null)
   const [formReady, setFormReady] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
 
   // settings 최초 로드 시 한 번만 폼 초기화. 렌더 중 조건부 setState(React 권장 "이전 렌더 정보로 상태 조정"
   // 패턴, 이펙트 아님) — 이후 재색인 폴링으로 status만 갱신될 때는 폼을 덮어쓰지 않아 미저장 편집이 보존된다.
@@ -197,8 +201,10 @@ export function SettingsPage() {
   const chatModels = catalog.chatModels[form.chat.provider] ?? []
   const embeddingModels = catalog.embeddingModels[form.embedding.provider] ?? []
 
-  const updateSection = (role: Role, patch: Partial<SectionForm>) =>
+  const updateSection = (role: Role, patch: Partial<SectionForm>) => {
+    setJustSaved(false) // 저장 후 편집 시작 → "저장됨" 표시를 지운다.
     setForm((prev) => (prev ? { ...prev, [role]: { ...prev[role], ...patch } } : prev))
+  }
 
   // provider 변경 시 그 provider의 첫 추천 모델을 자동 선택(백엔드 auto-default 미러 → 조합 일관성 유지).
   const onProviderChange = (role: Role, provider: string) => {
@@ -224,6 +230,7 @@ export function SettingsPage() {
     try {
       const updated = await save(body)
       setForm(toForm(updated)) // 저장 성공 → 폼 재설정(입력했던 키 필드 비움)
+      setJustSaved(true) // 다음 편집 전까지 유지되는 지속 표시(토스트는 잠깐만 보임)
       toast('저장됨')
     } catch (e) {
       // ProblemDetail 의 detail(사람이 읽을 메시지)이 그대로 넘어온다.
@@ -293,7 +300,7 @@ export function SettingsPage() {
         badge={<StatusBadge status={embStatus} />}
       />
 
-      <div className="row">
+      <div className="row" style={{ alignItems: 'center' }}>
         <button
           className="btn primary"
           onClick={() => void onSave()}
@@ -301,6 +308,9 @@ export function SettingsPage() {
         >
           {saving ? '저장 중…' : '저장'}
         </button>
+        {justSaved && (
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>✓ 저장됨</span>
+        )}
       </div>
       <div className="note">
         <b>설계</b>
