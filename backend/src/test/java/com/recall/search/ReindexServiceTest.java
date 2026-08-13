@@ -4,7 +4,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,12 +16,10 @@ import com.recall.memory.Memory;
 import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
 import com.recall.memory.type.SearchRepresentation;
-import com.recall.settings.ModelSetting;
 import com.recall.settings.ModelSettingRepository;
 import com.recall.settings.SettingsService;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -64,14 +61,6 @@ class ReindexServiceTest {
         when(pinnedClient.embedDocument(anyString())).thenReturn(new float[1024]);
     }
 
-    /** 행의 현재 세대(generation)를 stub 한 model_setting 을 반환하도록 배선한다. */
-    private ModelSetting rowWithGeneration(long generation) {
-        ModelSetting setting = mock(ModelSetting.class);
-        when(setting.getEmbeddingGeneration()).thenReturn(generation);
-        when(settingRepository.findById(1L)).thenReturn(Optional.of(setting));
-        return setting;
-    }
-
     @Test
     @DisplayName("각 활성 memory 를 고정 클라이언트로 재임베딩하고 세대가 현재면 상태를 READY 로 전이한다")
     void reindexAllSuccessSetsReadyWhenGenerationCurrent() {
@@ -82,7 +71,7 @@ class ReindexServiceTest {
         wirePinnedClient();
         when(memoryRepository.findByStatusOrderByCreatedAtDesc("active"))
                 .thenReturn(List.of(m1, m2));
-        ModelSetting setting = rowWithGeneration(7L);
+        when(settingRepository.updateEmbeddingStatusIfGeneration("READY", 7L)).thenReturn(1);
 
         newService().reindexAll(7L);
 
@@ -93,25 +82,23 @@ class ReindexServiceTest {
         verify(searchStore, times(2)).saveEmbedding(any(), anyString(), any());
         verify(searchStore).saveEmbedding(eq(1L), eq("document"), any());
         verify(searchStore).saveEmbedding(eq(2L), eq("document"), any());
-        verify(setting).setEmbeddingStatus("READY");
-        verify(settingRepository).save(setting);
+        verify(settingRepository).updateEmbeddingStatusIfGeneration("READY", 7L);
     }
 
     @Test
-    @DisplayName("더 새로운 세대가 행에 반영돼 있으면(대체됨) 뒤처진 잡은 READY 를 쓰지 않는다")
-    void reindexAllDoesNotSetReadyWhenSupersededByNewerGeneration() {
+    @DisplayName("더 새로운 세대가 행에 반영돼 있으면(대체됨) 뒤처진 잡은 예외 없이 건너뛴다(로그만 남김)")
+    void reindexAllDoesNotFailWhenSupersededByNewerGeneration() {
         Memory m1 = activeMemory(1L);
         when(rep.supports()).thenReturn(MemoryType.KNOWLEDGE);
         when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
         wirePinnedClient();
         when(memoryRepository.findByStatusOrderByCreatedAtDesc("active")).thenReturn(List.of(m1));
-        // 이 잡의 세대는 5 지만 행은 이미 6(뒤이은 설정 변경이 새 재색인을 예약함) — 대체됨.
-        ModelSetting setting = rowWithGeneration(6L);
+        // 이 잡의 세대는 5 지만 행은 이미 다른 세대로 대체됨 — UPDATE 가 0건 매치.
+        when(settingRepository.updateEmbeddingStatusIfGeneration("READY", 5L)).thenReturn(0);
 
         newService().reindexAll(5L);
 
-        verify(setting, never()).setEmbeddingStatus(anyString());
-        verify(settingRepository, never()).save(any());
+        verify(settingRepository).updateEmbeddingStatusIfGeneration("READY", 5L);
     }
 
     @Test
@@ -126,17 +113,16 @@ class ReindexServiceTest {
         when(embeddingClientFactory.forSettings(any())).thenReturn(pinnedClient);
         when(pinnedClient.embedDocument(anyString())).thenThrow(new RuntimeException("boom"));
         when(memoryRepository.findByStatusOrderByCreatedAtDesc("active")).thenReturn(List.of(m1));
-        ModelSetting setting = rowWithGeneration(3L);
+        when(settingRepository.updateEmbeddingStatusIfGeneration("FAILED", 3L)).thenReturn(1);
 
         newService().reindexAll(3L);
 
-        verify(setting).setEmbeddingStatus("FAILED");
-        verify(settingRepository).save(setting);
+        verify(settingRepository).updateEmbeddingStatusIfGeneration("FAILED", 3L);
     }
 
     @Test
-    @DisplayName("실패해도 더 새로운 세대가 있으면 뒤처진 잡은 FAILED 를 쓰지 않는다")
-    void reindexAllDoesNotSetFailedWhenSuperseded() {
+    @DisplayName("실패해도 더 새로운 세대가 있으면 뒤처진 잡은 예외 없이 건너뛴다(로그만 남김)")
+    void reindexAllDoesNotFailWhenSupersededOnFailurePath() {
         Memory m1 = activeMemory(1L);
         when(rep.supports()).thenReturn(MemoryType.KNOWLEDGE);
         when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
@@ -146,11 +132,10 @@ class ReindexServiceTest {
         when(embeddingClientFactory.forSettings(any())).thenReturn(pinnedClient);
         when(pinnedClient.embedDocument(anyString())).thenThrow(new RuntimeException("boom"));
         when(memoryRepository.findByStatusOrderByCreatedAtDesc("active")).thenReturn(List.of(m1));
-        ModelSetting setting = rowWithGeneration(9L);
+        when(settingRepository.updateEmbeddingStatusIfGeneration("FAILED", 4L)).thenReturn(0);
 
         newService().reindexAll(4L);
 
-        verify(setting, never()).setEmbeddingStatus(anyString());
-        verify(settingRepository, never()).save(any());
+        verify(settingRepository).updateEmbeddingStatusIfGeneration("FAILED", 4L);
     }
 }

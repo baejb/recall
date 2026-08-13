@@ -10,7 +10,6 @@ import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
 import com.recall.memory.type.SearchRepresentation;
 import com.recall.settings.EmbeddingModelChangedEvent;
-import com.recall.settings.ModelSetting;
 import com.recall.settings.ModelSettingRepository;
 import com.recall.settings.SettingsService;
 import java.util.List;
@@ -110,23 +109,18 @@ public class ReindexService {
      * 세대가 이미 행에 반영돼 있으면(= 뒤이은 설정 변경이 새 재색인을 예약함) 이 잡은 뒤처진(stale) 것이므로 상태를 쓰지 않고 건너뛴다 — 뒤늦은 앞선 잡이 새
      * 재색인 위에 READY/FAILED 를 덮어쓰지 못하게 한다.
      *
-     * <p>SettingsService 에 의존하지 않기 위해 {@link ModelSettingRepository}로 직접 로드·저장한다.
+     * <p>읽고-검사하고-쓰는 방식이 아니라 {@link ModelSettingRepository#updateEmbeddingStatusIfGeneration} 원자적
+     * 조건부 UPDATE 하나로 처리한다 — embedding_status 컬럼만 건드리고 embedding_generation 은 절대 읽거나 다시 쓰지 않으므로, 전체
+     * 엔티티 save 가 다른 트랜잭션의 세대 증가분을 덮어쓰는 lost update 가 구조적으로 불가능하다.
      */
     public void setEmbeddingStatusIfCurrent(String status, long myGeneration) {
-        ModelSetting s =
-                settingRepository
-                        .findById(1L)
-                        .orElseThrow(() -> new IllegalStateException("model_setting 미초기화"));
-        if (s.getEmbeddingGeneration() != myGeneration) {
+        int updated = settingRepository.updateEmbeddingStatusIfGeneration(status, myGeneration);
+        if (updated == 0) {
             log.info(
-                    "재색인(generation={})은 더 새로운 generation={}에 의해 대체됨 — 상태({}) 전이 건너뜀",
+                    "재색인(generation={})은 더 새로운 generation에 의해 대체됨 — 상태({}) 전이 건너뜀",
                     myGeneration,
-                    s.getEmbeddingGeneration(),
                     status);
-            return;
         }
-        s.setEmbeddingStatus(status);
-        settingRepository.save(s);
     }
 
     private Map<String, Object> parseStructured(String json) {
