@@ -63,40 +63,59 @@ public class StorePipeline {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onCaptureCreated(CaptureCreatedEvent event) {
-        Capture capture =
-                captureRepository
-                        .findById(event.captureId())
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "capture 없음: " + event.captureId()));
+        // 진행 단계를 추적해 실패 시 어느 단계에서 죽었는지 상태로 드러낸다(조용한 실패 금지).
+        String stage = "classify";
+        try {
+            Capture capture =
+                    captureRepository
+                            .findById(event.captureId())
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalStateException(
+                                                    "capture 없음: " + event.captureId()));
 
-        MemoryType type = classify(event.maskedText());
-        Map<String, Object> structured = extractions.get(type).extract(event.maskedText()); // S2
+            MemoryType type = classify(event.maskedText());
 
-        // S4 — 유사 기존 기억을 찾아 대조 판정. 후보가 없으면 빈 맵을 넘겨 NEW로 귀결.
-        Optional<Memory> similar = similarMemoryFinder.findSimilar(structured, type);
-        Map<String, Object> existing =
-                similar.map(m -> parse(m.getStructured())).orElseGet(Map::of);
-        Judgement judgement = judges.get(type).judge(structured, existing);
+            stage = "extract";
+            Map<String, Object> structured =
+                    extractions.get(type).extract(event.maskedText()); // S2
 
-        // targetMemoryId는 judge가 알 수 없어 여기서 후보 id로 채운다(NEW면 대상 없음).
-        Memory target = judgement.verdict() == Verdict.NEW ? null : similar.orElse(null);
-        ReviewItem item =
-                new ReviewItem(
-                        capture,
-                        type,
-                        judgement.verdict(),
-                        target,
-                        judgement.rationale(),
-                        toJson(structured));
-        reviewRepository.save(item);
-        log.info(
-                "검토 대기함 등록: capture={} type={} verdict={} target={}",
-                capture.getId(),
-                type,
-                judgement.verdict(),
-                target == null ? null : target.getId());
+            stage = "judge";
+            // S4 — 유사 기존 기억을 찾아 대조 판정. 후보가 없으면 빈 맵을 넘겨 NEW로 귀결.
+            Optional<Memory> similar = similarMemoryFinder.findSimilar(structured, type);
+            Map<String, Object> existing =
+                    similar.map(m -> parse(m.getStructured())).orElseGet(Map::of);
+            Judgement judgement = judges.get(type).judge(structured, existing);
+
+            stage = "review";
+            // targetMemoryId는 judge가 알 수 없어 여기서 후보 id로 채운다(NEW면 대상 없음).
+            Memory target = judgement.verdict() == Verdict.NEW ? null : similar.orElse(null);
+            ReviewItem item =
+                    new ReviewItem(
+                            capture,
+                            type,
+                            judgement.verdict(),
+                            target,
+                            judgement.rationale(),
+                            toJson(structured));
+            reviewRepository.save(item);
+
+            // 성공: 검토 항목과 함께 DONE 을 이 REQUIRES_NEW 트랜잭션으로 같이 커밋한다(관리 엔티티 dirty flush).
+            capture.setStatus("DONE");
+            log.info(
+                    "검토 대기함 등록: capture={} type={} verdict={} target={}",
+                    capture.getId(),
+                    type,
+                    judgement.verdict(),
+                    target == null ? null : target.getId());
+        } catch (Exception e) {
+            // 조용한 실패 금지: 실패 단계를 로그로 드러내고 FAILED 를 durable 하게 남긴다.
+            log.error("캡처 처리 실패 stage={} capture={}", stage, event.captureId(), e);
+            // markFailed 는 자기 소유의 REQUIRES_NEW 트랜잭션이라, 이 (예외로 무의미해진) 트랜잭션과 무관하게
+            // FAILED 를 독립 커밋한다. 검토 항목은 성공 경로에서만 save 하므로 부분 항목이 새지 않는다.
+            captureRepository.markFailed(event.captureId(), stage);
+            // 이미 FAILED 로 durable 하게 드러났으므로 재던지지 않는다.
+        }
     }
 
     private MemoryType classify(String maskedText) {
