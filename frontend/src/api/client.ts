@@ -1,6 +1,7 @@
 import type {
   AnswerFragment,
   ApproveResponse,
+  CaptureRawResponse,
   CaptureResponse,
   CaptureStatusResponse,
   CatalogResponse,
@@ -51,6 +52,14 @@ export function getReviewCount(signal?: AbortSignal): Promise<ReviewCountRespons
 /** GET /api/captures/active — 검토함에 아직 안 올라온 처리중(PROCESSING)/실패(FAILED) 캡처. */
 export function getActiveCaptures(signal?: AbortSignal): Promise<CaptureStatusResponse[]> {
   return request<CaptureStatusResponse[]>('/captures/active', { signal })
+}
+
+/** GET /api/captures/{id} — 원본 캡처(마스킹 완료된 원문). 없으면 404 → request()가 예외로 던짐. */
+export function getCaptureRaw(
+  id: string | number,
+  signal?: AbortSignal
+): Promise<CaptureRawResponse> {
+  return request<CaptureRawResponse>(`/captures/${id}`, { signal })
 }
 
 export function createCapture(rawText: string, sourceType = 'chat'): Promise<CaptureResponse> {

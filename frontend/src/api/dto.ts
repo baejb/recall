@@ -119,3 +119,11 @@ export interface MemoryDetailResponse {
   status: string
   createdAt: string
 }
+
+/** GET /api/captures/{id} — 원본 캡처(마스킹 완료된 원문). 없으면 404. */
+export interface CaptureRawResponse {
+  id: number
+  sourceType: string
+  rawText: string
+  createdAt: string
+}

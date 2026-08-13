@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
 import { StatusPill } from '../components/StatusPill'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
+import { CaptureRawView } from '../components/CaptureRawView'
 
 export function ReviewDetailPage() {
   const { id } = useParams()
@@ -96,7 +97,9 @@ export function ReviewDetailPage() {
         )
       })}
 
-      <div className="row">
+      <CaptureRawView key={review.captureId} captureId={review.captureId} />
+
+      <div className="row" style={{ marginTop: 18 }}>
         <button className="btn primary" onClick={() => void approve()} disabled={busy}>
           ✓ 승인하고 저장
         </button>

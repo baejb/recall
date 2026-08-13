@@ -5,6 +5,7 @@ import { toTypeKey } from '../api/adapter'
 import type { MemoryDetailResponse } from '../api/dto'
 import { TYPE_META } from '../lib/typeMeta'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
+import { CaptureRawView } from '../components/CaptureRawView'
 
 type LoadState =
   | { kind: 'loading' }
@@ -125,6 +126,8 @@ export function MemoryDetailPage() {
             document={d.document}
           />
         </div>
+
+        <CaptureRawView key={d.captureId} captureId={d.captureId} />
       </div>
     </section>
   )
