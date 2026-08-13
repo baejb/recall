@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettings } from '../hooks/useSettings'
 import { useToast } from '../hooks/useToast'
+import { ThemeToggle } from '../components/ThemeToggle'
 import type {
   EmbeddingStatus,
   ModelSettings,
@@ -176,7 +177,12 @@ export function SettingsPage() {
         <div className="eyebrow">설정</div>
         <h1 className="h1">모델 설정</h1>
         <div className="card empty">
-          <div className="big">⚠️</div>
+          <div className="big">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3l9 16H3z" />
+              <path d="M12 10v4M12 17h.01" />
+            </svg>
+          </div>
           <p style={{ fontWeight: 600, margin: '10px 0 2px' }}>설정을 불러오지 못했어요</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px' }}>{error}</p>
           <button className="btn" onClick={reload}>
@@ -235,7 +241,7 @@ export function SettingsPage() {
       toast('저장됨')
     } catch (e) {
       // ProblemDetail 의 detail(사람이 읽을 메시지)이 그대로 넘어온다.
-      toast(`⚠️ ${e instanceof Error ? e.message : '저장 실패'}`)
+      toast(`${e instanceof Error ? e.message : '저장 실패'}`)
     } finally {
       setSaving(false)
     }
@@ -310,7 +316,7 @@ export function SettingsPage() {
           {saving ? '저장 중…' : '저장'}
         </button>
         {justSaved && (
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>✓ 저장됨</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>저장됨</span>
         )}
       </div>
       <div className="note">
@@ -319,6 +325,14 @@ export function SettingsPage() {
           실제 키는 화면에 표시되지 않아요(설정 여부만). 임베딩 provider·모델 변경은 유효한 키
           검증을 거쳐야 기존 벡터를 보호해요.
         </span>
+      </div>
+
+      <div className="card pad" style={{ marginTop: 22 }}>
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>화면</div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px' }}>
+          테마는 즉시 적용돼요(저장 불필요). 라이트·다크·시스템 중에서 골라요.
+        </p>
+        <ThemeToggle />
       </div>
     </section>
   )

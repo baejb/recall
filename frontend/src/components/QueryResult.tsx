@@ -53,46 +53,37 @@ export function QueryResult({ question, onBack }: { question: string; onBack: ()
 
       {error ? (
         <div className="miss-banner">
-          <span>⚠️</span> 답변 중 문제가 생겼어요: {error}
+          <span className="mk">!</span> 답변 중 문제가 생겼어요: {error}
         </div>
       ) : isEmpty ? (
         <div className="miss-banner">
-          <span>🔍</span> 기억엔 없는 질문이에요. 지어내지 않고 "기록 없음"으로 남겨요.
+          <span className="mk">§</span> 기억엔 없는 질문이에요. 지어내지 않고 "기록 없음"으로
+          남겨요.
         </div>
       ) : (
-        <div className="found-banner">
-          <span>🧠</span> {done ? '내 기억에서 찾은 답이에요.' : '기억을 뒤지는 중…'}
+        <div className="qstatus">
+          <span className="d" /> {done ? '내 기억에서 찾은 답이에요' : '기억을 뒤지는 중…'}
         </div>
       )}
 
       {!isEmpty && !error && (
         <div className="card pad">
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>{question}</div>
-          <div className="v" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+          <div className="qecho">{question}</div>
+          <div className="v" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
             {answer}
-            {!done && <span className="cursor">▍</span>}
+            {!done && <span className="cursor" aria-hidden="true" />}
           </div>
 
           {citations.length > 0 && (
             <>
-              <hr className="divider" />
-              <h3
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-faint)',
-                  fontFamily: 'var(--font-mono)',
-                  margin: '0 0 8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.08em',
-                }}
-              >
-                근거 ({citations.length})
-              </h3>
+              <div className="provline">
+                <span className="mk">§</span> 근거 {citations.length}건 — 아래 기억에 매인 답변
+              </div>
               {citations.map((c, i) => (
                 <button
                   key={c.id}
                   className="srcitem"
-                  style={{ width: '100%', textAlign: 'left', marginBottom: 8 }}
+                  style={{ width: '100%', textAlign: 'left' }}
                   onClick={() => navigate(`/memories/${c.id}`)}
                 >
                   <div className="snum">{i + 1}</div>

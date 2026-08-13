@@ -7,9 +7,9 @@
   --text: #1a2530;
   --text-muted: #5c6975;
   --text-faint: #8996a2;
-  --accent: #0d9488;
-  --accent-ink: #0a6f66;
-  --accent-soft: #d6f1ec;
+  --accent: #2563eb;
+  --accent-ink: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.1);
   --ok: #15803d;
   --ok-soft: #dcfce7;
   --warn: #b45309;
@@ -35,9 +35,9 @@
     --text: #e7edf3;
     --text-muted: #94a2b1;
     --text-faint: #6b7885;
-    --accent: #2dd4bf;
-    --accent-ink: #5eead4;
-    --accent-soft: rgba(45, 212, 191, 0.13);
+    --accent: #4f8dff;
+    --accent-ink: #7daaff;
+    --accent-soft: rgba(79, 141, 255, 0.16);
     --ok: #4ade80;
     --ok-soft: rgba(74, 222, 128, 0.14);
     --warn: #fbbf24;
@@ -59,9 +59,9 @@
   --text: #e7edf3;
   --text-muted: #94a2b1;
   --text-faint: #6b7885;
-  --accent: #2dd4bf;
-  --accent-ink: #5eead4;
-  --accent-soft: rgba(45, 212, 191, 0.13);
+  --accent: #4f8dff;
+  --accent-ink: #7daaff;
+  --accent-soft: rgba(79, 141, 255, 0.16);
   --ok: #4ade80;
   --ok-soft: rgba(74, 222, 128, 0.14);
   --warn: #fbbf24;
@@ -135,13 +135,13 @@ img {
 .brand .logo {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 17px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
+  flex: none;
+  display: block;
+}
+.brand .logo svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .brand .name {
   font-weight: 700;
@@ -182,6 +182,18 @@ img {
   font-size: 16px;
   width: 20px;
   text-align: center;
+}
+.nav svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  opacity: 0.8;
+}
+.nav.active svg {
+  opacity: 1;
 }
 .nav:hover {
   background: var(--surface-2);
@@ -613,6 +625,79 @@ input:focus {
   margin-bottom: 12px;
   border: 1px dashed var(--border-strong);
 }
+.miss-banner .mk {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  flex: none;
+}
+
+/* 물어보기 — 조용한 상태줄 · 근거 시그니처 · 스트리밍 커서 */
+.qstatus {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.qstatus .d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.qecho {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+.provline {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 10px;
+}
+.provline .mk {
+  color: var(--accent);
+}
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  background: var(--accent);
+  margin-left: 2px;
+  transform: translateY(2px);
+  animation: blink 1.05s step-end infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}
+
+/* 원문/원본 블록 — pre-wrap 유지하되 긴 토큰(코드·URL·경로)이 박스 밖으로 넘치지 않게 꺾고, 넘칠 땐 박스 안에서 스크롤 */
+.docblock {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: auto;
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  line-height: 1.6;
+  font-size: 13px;
+}
 
 .grid {
   display: grid;
@@ -1002,6 +1087,16 @@ input:focus {
 }
 .empty .big {
   font-size: 34px;
+}
+.empty .big svg {
+  width: 32px;
+  height: 32px;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
 }
 
 .toast {

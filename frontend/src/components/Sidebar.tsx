@@ -1,48 +1,83 @@
 import { NavLink } from 'react-router-dom'
 import { useRecall } from '../hooks/useRecall'
-import { ThemeToggle } from './ThemeToggle'
 
 function navClass({ isActive }: { isActive: boolean }): string {
   return isActive ? 'nav active' : 'nav'
 }
 
-/** 좌측 내비게이션. 핵심 흐름(물어보기·붙여넣기·검토함·내 기억)만 노출한다. */
+/** 접힌 노트 모서리 + R 로고 마크. teal/blue 액센트는 토큰을 따라간다(테마 대응). */
+function LogoMark() {
+  return (
+    <svg className="logo" viewBox="0 0 32 32" role="img" aria-label="Recall">
+      <path
+        d="M7 1 H22.5 L31 9.5 V25 A6 6 0 0 1 25 31 H7 A6 6 0 0 1 1 25 V7 A6 6 0 0 1 7 1 Z"
+        fill="var(--accent)"
+      />
+      <path d="M22.5 1 L31 9.5 H22.5 Z" fill="var(--accent-ink)" />
+      <g fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 9 V23.5" />
+        <path d="M11 9 H16 A3.6 3.6 0 0 1 16 16 H11" />
+        <path d="M13.6 16 L18.6 23.5" />
+      </g>
+    </svg>
+  )
+}
+
+/** 좌측 내비게이션. 핵심 흐름(물어보기·붙여넣기·검토함·내 기억)만 노출한다. 아이콘은 얇은 단색 라인으로 통일. */
 export function Sidebar() {
   const { reviewCount } = useRecall()
   return (
     <aside className="side">
       <div className="brand">
-        <div className="logo">🧠</div>
+        <LogoMark />
         <div>
           <div className="name">Recall</div>
-          <div className="sub">내가 물어보는 곳</div>
+          <div className="sub">근거와 함께 회상</div>
         </div>
       </div>
 
       <div className="navlabel">쓰기</div>
       <NavLink to="/" end className={navClass}>
-        <span className="ico">🔎</span> 물어보기
+        <svg viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M16 16l5 5" />
+        </svg>
+        물어보기
       </NavLink>
       <NavLink to="/capture" className={navClass}>
-        <span className="ico">➕</span> 새로 붙여넣기
+        <svg viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        새로 붙여넣기
       </NavLink>
       <NavLink to="/reviews" className={navClass}>
-        <span className="ico">📥</span> 검토함
+        <svg viewBox="0 0 24 24">
+          <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+          <path d="M8 10l4 4 4-4" />
+          <path d="M12 3v11" />
+        </svg>
+        검토함
         {reviewCount > 0 && <span className="badge">{reviewCount}</span>}
       </NavLink>
 
       <div className="navlabel">보기</div>
       <NavLink to="/memories" className={navClass}>
-        <span className="ico">🧠</span> 내 기억
+        <svg viewBox="0 0 24 24">
+          <path d="M4 5h16M4 12h16M4 19h10" />
+        </svg>
+        내 기억
       </NavLink>
 
       <div className="navlabel">설정</div>
       <NavLink to="/settings" className={navClass}>
-        <span className="ico">⚙️</span> 설정
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+        </svg>
+        설정
       </NavLink>
 
       <div className="spacer" />
-      <ThemeToggle />
       <div className="userchip">
         <div className="av">이</div>
         <div>

@@ -85,18 +85,7 @@ export function CaptureRawView({ captureId }: CaptureRawViewProps) {
                 <div className="k">저장일</div>
                 <div className="v">{state.data.createdAt.slice(0, 10)}</div>
               </div>
-              <div
-                className="v"
-                style={{
-                  whiteSpace: 'pre-wrap',
-                  padding: 12,
-                  background: 'var(--surface-2)',
-                  borderRadius: 8,
-                  lineHeight: 1.6,
-                }}
-              >
-                {state.data.rawText}
-              </div>
+              <div className="docblock">{state.data.rawText}</div>
               <div className="note" style={{ marginTop: 10 }}>
                 <b>안내</b>
                 <span>비밀값은 가려진 원문이에요.</span>

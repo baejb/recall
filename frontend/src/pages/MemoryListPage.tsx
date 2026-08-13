@@ -21,14 +21,14 @@ export function MemoryListPage() {
       <div className="eyebrow">내 기억</div>
       <h1 className="h1">되찾을 수 있게 쌓인 것들</h1>
       <p className="lede">
-        유형은 저장할 때 직접 골라요 — 🔧 트러블슈팅 · 📘 지식. 뜻으로도, 정확한 단어로도 검색돼요.
+        유형은 저장할 때 직접 골라요 — 트러블슈팅 · 지식. 뜻으로도, 정확한 단어로도 검색돼요.
       </p>
 
       <div className="searchbar">
         <input
           type="text"
           value={search}
-          placeholder="🔎 '권한', 'RRF'… 검색"
+          placeholder="'권한', 'RRF'… 검색"
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
@@ -52,7 +52,12 @@ export function MemoryListPage() {
 
       {error ? (
         <div className="card empty">
-          <div className="big">⚠️</div>
+          <div className="big">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3l9 16H3z" />
+              <path d="M12 10v4M12 17h.01" />
+            </svg>
+          </div>
           <p style={{ fontWeight: 600, margin: '10px 0 2px' }}>불러오지 못했어요</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px' }}>{error}</p>
           <button className="btn" onClick={() => void refresh()}>
@@ -94,7 +99,7 @@ export function MemoryListPage() {
                 <div className="foot">
                   <span className="date">{m.created}</span>
                   <span className="evidence" style={{ padding: '3px 8px' }}>
-                    📎 원본 1
+                    § 원본 1
                   </span>
                 </div>
               </button>

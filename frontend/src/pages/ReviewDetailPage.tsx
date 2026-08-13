@@ -31,10 +31,10 @@ export function ReviewDetailPage() {
     setBusy(true)
     try {
       const n = await approveReview(review.id)
-      toast(`✓ 기억으로 저장됨 (#${n})`)
+      toast(`기억으로 저장됨 (#${n})`)
       navigate('/memories')
     } catch (e) {
-      toast(`⚠️ 승인 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+      toast(`승인 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
       setBusy(false)
     }
   }
@@ -45,7 +45,7 @@ export function ReviewDetailPage() {
       toast('반려됨 · 원본은 보존돼요')
       navigate('/reviews')
     } catch (e) {
-      toast(`⚠️ 반려 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+      toast(`반려 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
       setBusy(false)
     }
   }
@@ -101,10 +101,10 @@ export function ReviewDetailPage() {
 
       <div className="row" style={{ marginTop: 18 }}>
         <button className="btn primary" onClick={() => void approve()} disabled={busy}>
-          ✓ 승인하고 저장
+          승인하고 저장
         </button>
         <button className="btn danger" onClick={() => void reject()} disabled={busy}>
-          ✕ 반려
+          반려
         </button>
       </div>
       <div className="note">

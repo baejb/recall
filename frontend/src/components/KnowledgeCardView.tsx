@@ -70,17 +70,7 @@ export function KnowledgeCardView({
             {open ? '원문 정리 접기 ▲' : '원문 정리 보기 ▼'}
           </button>
           {open && (
-            <div
-              className="v"
-              style={{
-                whiteSpace: 'pre-wrap',
-                marginTop: 10,
-                padding: 12,
-                background: 'var(--surface-2)',
-                borderRadius: 8,
-                lineHeight: 1.6,
-              }}
-            >
+            <div className="docblock" style={{ marginTop: 10 }}>
               {document}
             </div>
           )}

@@ -5,7 +5,7 @@ export function RecurBadge({ memory }: { memory: Memory }) {
   if (!memory.hits || memory.hits <= 1) return null
   return (
     <span className="recur">
-      🔁 {memory.hits}회 · 마지막 {memory.lastSeen || memory.created}
+      재발 {memory.hits}회 · 마지막 {memory.lastSeen || memory.created}
     </span>
   )
 }

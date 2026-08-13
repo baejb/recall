@@ -47,7 +47,7 @@ export function ReviewListPage() {
       {failed.length > 0 && (
         <div className="card pad" style={{ marginBottom: 14, borderLeft: '3px solid var(--bad)' }}>
           <p style={{ fontWeight: 600, margin: '0 0 8px', color: 'var(--bad)' }}>
-            ⚠️ {failed.length}건 처리 실패
+            {failed.length}건 처리 실패
           </p>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)' }}>
             {failed.map((f) => (
@@ -61,7 +61,12 @@ export function ReviewListPage() {
 
       {error && (
         <div className="card empty">
-          <div className="big">⚠️</div>
+          <div className="big">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3l9 16H3z" />
+              <path d="M12 10v4M12 17h.01" />
+            </svg>
+          </div>
           <p style={{ fontWeight: 600, margin: '10px 0 2px' }}>불러오지 못했어요</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px' }}>{error}</p>
           <button className="btn" onClick={() => void refresh()}>
@@ -79,13 +84,18 @@ export function ReviewListPage() {
             // "검토할 게 없어요"(완전한 빈 상태처럼 보임)를 대신 숨긴다.
             processing.length === 0 && (
               <div className="card empty">
-                <div className="big">✅</div>
+                <div className="big">
+                  <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M8 12l3 3 5-6" />
+                  </svg>
+                </div>
                 <p style={{ fontWeight: 600, margin: '10px 0 2px' }}>검토할 게 없어요</p>
                 <p style={{ fontSize: 13.5, margin: '0 0 14px' }}>
                   새로 붙여넣으면 여기로 올라와요.
                 </p>
                 <button className="btn" onClick={() => navigate('/capture')}>
-                  ➕ 새로 붙여넣기
+                  새로 붙여넣기
                 </button>
               </div>
             )
@@ -93,7 +103,7 @@ export function ReviewListPage() {
               const title = r.cards[0] ? r.cards[0].title : '세션'
               return (
                 <button key={r.id} className="listrow" onClick={() => navigate(`/reviews/${r.id}`)}>
-                  <span className="type-tag">📋 세션</span>
+                  <span className="type-tag">세션</span>
                   <div className="body">
                     <div className="t">{title}</div>
                     <div className="s">승인 대기</div>

@@ -3,9 +3,9 @@ import { useToast } from '../hooks/useToast'
 import { QueryResult } from '../components/QueryResult'
 
 const EXAMPLES = [
-  { q: '도커 권한 에러 어떻게 풀었지?', label: '🔧 도커 권한…' },
-  { q: 'CORS 프리플라이트 왜 막히지?', label: '🔧 CORS…' },
-  { q: 'RRF가 뭐야?', label: '📘 RRF가 뭐야?' },
+  { q: '도커 권한 에러 어떻게 풀었지?', label: '도커 권한 에러…' },
+  { q: 'CORS 프리플라이트 왜 막히지?', label: 'CORS 프리플라이트…' },
+  { q: 'RRF가 뭐야?', label: 'RRF가 뭐야?' },
 ]
 
 type Phase = 'home' | 'result'

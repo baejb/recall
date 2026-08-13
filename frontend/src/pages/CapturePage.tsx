@@ -8,31 +8,29 @@ import { StepProgress } from '../components/StepProgress'
 
 const EXTRACT_STEPS = ['유형 후보 추출', '문제·시도·해결 뽑기', '검토함에 후보 올리기'] as const
 
-const SAMPLE_TEXT = `[나] docker compose up 하면 컨테이너가 볼륨에 못 써. Permission denied 남.
-    포스트그레 컨테이너가 /var/lib/postgresql/data 에 EACCES...
-    참고로 내 .env 에 DB_PASSWORD=s3cr3t!pw 랑 AWS_KEY=AKIA5XXQ 있음
-[클로드] 호스트 볼륨 소유자 UID와 컨테이너 유저 UID가 안 맞아서 그래요.
-    1) chmod 777 은 임시방편이고 보안상 별로…
-    2) Dockerfile에서 USER 지정하고, 마운트 경로를 chown 하는 게 정석입니다.
-[나] 오 chown 하니까 됐다!`
-
 interface Draft {
   text: string
   found: DetectedSecret[]
   masked: string
 }
 
-type Step = 'input' | 'mask' | 'extracting'
+type Step = 'input' | 'mask' | 'extracting' | 'done'
 
 export function CapturePage() {
   const [step, setStep] = useState<Step>('input')
-  const [text, setText] = useState(SAMPLE_TEXT)
+  const [text, setText] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
+  // 검토함에 실제로 떴는지(true) vs 아직 정리 중(false=타임아웃). 완료 화면 문구를 가른다.
+  const [readyInReview, setReadyInReview] = useState(false)
   const { submitCapture } = useRecall()
   const navigate = useNavigate()
   const toast = useToast()
 
   const goMask = () => {
+    if (!text.trim()) {
+      toast('붙여넣을 내용을 입력해 주세요')
+      return
+    }
     const found = detectSecrets(text)
     setDraft({ text, found, masked: maskText(text, found) })
     setStep('mask')
@@ -48,13 +46,24 @@ export function CapturePage() {
       const { found } = await submitCapture(draft.text)
       // found=false면 타임아웃(10s) — 캡처 자체는 성공했으니 실패로 보이면 안 된다.
       // 아직 검토함에 안 떴을 수 있음을 알리고, 조용히 넘어가지 않는다(조용한 실패 금지).
-      toast(found ? '✓ 검토함에 올렸어요' : '정리가 조금 더 걸려요 — 곧 검토함에 나타나요')
-      navigate('/reviews')
+      toast(found ? '검토함에 올렸어요' : '정리가 조금 더 걸려요 — 곧 검토함에 나타나요')
+      // 자동 이동 금지: 사용자가 다른 화면(물어보기 등)에서 작업 중일 수 있다. 완료 화면으로만
+      // 전환하고, 실제 검토함 이동은 사용자가 버튼을 눌러 허락할 때만 한다(질문 입력 유실 방지).
+      // 이미 이 화면을 떠났다면 setStep 은 no-op이고 위 토스트만 알림으로 남는다.
+      setReadyInReview(found)
+      setStep('done')
     } catch (e) {
       // 조용한 실패 금지: 실패를 알리고 입력 화면으로 되돌린다.
-      toast(`⚠️ 저장 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
+      toast(`저장 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`)
       setStep('input')
     }
+  }
+
+  const restart = () => {
+    setText('')
+    setDraft(null)
+    setReadyInReview(false)
+    setStep('input')
   }
 
   if (step === 'extracting') {
@@ -70,8 +79,36 @@ export function CapturePage() {
           <p
             style={{ fontSize: 13, color: 'var(--text-faint)', marginTop: 20, textAlign: 'center' }}
           >
-            비동기라 이 화면을 떠나도 돼요.
+            비동기라 이 화면을 떠나도 돼요. 다른 화면으로 이동해도 저장은 계속돼요.
           </p>
+        </div>
+      </section>
+    )
+  }
+
+  if (step === 'done') {
+    return (
+      <section className="screen">
+        <div className="eyebrow">저장</div>
+        <h1 className="h1">{readyInReview ? '검토함에 올렸어요' : '정리 중이에요'}</h1>
+        <p className="lede">
+          {readyInReview
+            ? '승인해야 기억이 돼요. 지금 검토하거나, 계속 붙여넣어도 돼요.'
+            : '정리가 조금 더 걸려요. 끝나면 검토함에 나타나요 — 계속 붙여넣어도 돼요.'}
+        </p>
+        <div className="card pad">
+          <div className="row">
+            <button className="btn primary" onClick={() => navigate('/reviews')}>
+              검토함 보기 →
+            </button>
+            <button className="btn" onClick={restart}>
+              새로 붙여넣기
+            </button>
+          </div>
+          <div className="note">
+            <b>승인 게이트</b>
+            <span>붙여넣은 원문은 검토함을 거쳐 승인해야 기억이 돼요 — 자동 저장은 없어요.</span>
+          </div>
         </div>
       </section>
     )
@@ -93,7 +130,7 @@ export function CapturePage() {
           {draft.found.length > 0 ? (
             draft.found.map((f, i) => (
               <div className="maskitem" key={`${f.key}-${i}`}>
-                <span className="lock">🔒</span>
+                <span className="lock">◈</span>
                 <div className="info">
                   <span className="key">{f.key}</span>{' '}
                   <span className="prev">{f.val.slice(0, 10)}… → ●●●●●●●</span>
@@ -137,7 +174,12 @@ export function CapturePage() {
       <Stepper current={0} />
       <div className="card pad">
         <label className="field-label">붙여넣기 (클로드·GPT 대화, 에러 로그 무엇이든)</label>
-        <textarea rows={9} value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea
+          rows={9}
+          value={text}
+          placeholder="클로드·GPT 대화나 에러 로그를 그대로 붙여넣으세요. 키·비밀번호·이메일은 저장 전에 자동으로 가려요."
+          onChange={(e) => setText(e.target.value)}
+        />
         <div className="between" style={{ marginTop: 16 }}>
           <span className="eyebrow">source: chat</span>
           <button className="btn primary" onClick={goMask}>
