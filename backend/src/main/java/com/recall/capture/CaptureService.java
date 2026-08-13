@@ -1,9 +1,12 @@
 package com.recall.capture;
 
 import com.recall.capture.dto.CaptureRequest;
+import com.recall.capture.dto.CaptureStatusResponse;
+import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 원문 저장 서비스. 마스킹 우선 → 원문(근거) 커밋(유실 금지 앵커) → 저장 방송. */
@@ -50,5 +53,25 @@ public class CaptureService {
                             new CaptureCreatedEvent(saved.getId(), masked.maskedText()));
                     return saved.getId();
                 });
+    }
+
+    /**
+     * 아직 검토 대기함에 오르지 않은(처리 중이거나 실패한) 캡처를 최신순으로 노출한다. 조용한 실패 금지: FAILED 도 목록에 실려 UI 가 "정리 중/실패"를 보여줄
+     * 수 있게 한다. 원문은 응답에 담지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public List<CaptureStatusResponse> activeCaptures() {
+        return captureRepository
+                .findByStatusInOrderByCreatedAtDesc(List.of("PROCESSING", "FAILED"))
+                .stream()
+                .map(
+                        c ->
+                                new CaptureStatusResponse(
+                                        c.getId(),
+                                        c.getStatus(),
+                                        c.getSourceType(),
+                                        c.getFailedStage(),
+                                        c.getCreatedAt()))
+                .toList();
     }
 }

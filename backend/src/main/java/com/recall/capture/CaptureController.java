@@ -2,9 +2,12 @@ package com.recall.capture;
 
 import com.recall.capture.dto.CaptureRequest;
 import com.recall.capture.dto.CaptureResponse;
+import com.recall.capture.dto.CaptureStatusResponse;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,5 +29,11 @@ public class CaptureController {
         Long captureId = captureService.capture(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new CaptureResponse(captureId, "accepted"));
+    }
+
+    /** 처리 중/실패한(아직 검토 대기함 전) 캡처 목록 — UI 의 "정리 중/실패" 표시용. 원문은 포함하지 않는다. */
+    @GetMapping("/active")
+    public List<CaptureStatusResponse> active() {
+        return captureService.activeCaptures();
     }
 }
