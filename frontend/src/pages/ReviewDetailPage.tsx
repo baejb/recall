@@ -4,6 +4,7 @@ import { useRecall } from '../hooks/useRecall'
 import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
 import { StatusPill } from '../components/StatusPill'
+import { KnowledgeCardView } from '../components/KnowledgeCardView'
 
 export function ReviewDetailPage() {
   const { id } = useParams()
@@ -84,10 +85,12 @@ export function ReviewDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="kv">
-                <div className="k">내용</div>
-                <div className="v">{c.kn.content}</div>
-              </div>
+              <KnowledgeCardView
+                summary={c.kn.summary}
+                facts={c.kn.facts}
+                keywords={c.kn.keywords}
+                document={c.kn.content}
+              />
             )}
           </div>
         )
