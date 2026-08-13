@@ -2,6 +2,7 @@ import type {
   AnswerFragment,
   ApproveResponse,
   CaptureResponse,
+  CaptureStatusResponse,
   CatalogResponse,
   MemoryResponse,
   ReviewCountResponse,
@@ -36,6 +37,11 @@ export function getReviews(signal?: AbortSignal): Promise<ReviewItemResponse[]> 
 
 export function getReviewCount(signal?: AbortSignal): Promise<ReviewCountResponse> {
   return request<ReviewCountResponse>('/reviews/count', { signal })
+}
+
+/** GET /api/captures/active — 검토함에 아직 안 올라온 처리중(PROCESSING)/실패(FAILED) 캡처. */
+export function getActiveCaptures(signal?: AbortSignal): Promise<CaptureStatusResponse[]> {
+  return request<CaptureStatusResponse[]>('/captures/active', { signal })
 }
 
 export function createCapture(rawText: string, sourceType = 'chat'): Promise<CaptureResponse> {

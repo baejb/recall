@@ -88,6 +88,15 @@ export interface CatalogResponse {
   embeddingModels: Record<string, string[]>
 }
 
+/** GET /api/captures/active — 검토함에 아직 안 올라온 처리중/실패 캡처(조용한 실패 금지). */
+export interface CaptureStatusResponse {
+  id: number
+  status: string // PROCESSING | FAILED
+  sourceType: string
+  failedStage: string | null // classify | extract | judge | review | null
+  createdAt: string
+}
+
 /** proposed / structured 안의 KnowledgeCard(추출 스키마). */
 export interface KnowledgeCard {
   title?: string
