@@ -2,6 +2,8 @@ package com.recall.settings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -9,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.llm.EmbeddingClientFactory;
+import com.recall.llm.StubEmbeddingClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,16 +20,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 통합 스모크(부팅→설정 조회→임베딩 provider 변경→비동기 재색인→READY 수렴) — 실 API 키 없이 stub 경로만 사용한다(외부 네트워크 호출 없음).
+ * 통합 스모크(부팅→설정 조회→임베딩 provider 변경→비동기 재색인→READY 수렴) — 외부 네트워크 호출 없이 stub 임베딩만 사용한다.
+ *
+ * <p>P1-b(유효 키 없는 임베딩 provider/모델 변경은 기존 벡터 보호를 위해 거부)에 맞춰, env 임베딩
+ * 키(recall.llm.embedding.api-key)를 비어 있지 않게 주입해 유효 키 요건을 만족시킨다(요청 바디의 apiKey 는 여전히 null — cipher
+ * 불필요). 실 provider 로 네트워크가 나가지 않도록 {@link EmbeddingClientFactory} 빈을 {@link MockitoBean}으로 대체해
+ * 프로브·재색인 모두 {@link StubEmbeddingClient}(0벡터)를 쓰게 한다 — 이 테스트가 검증하는 건 provider 선택이 아니라
+ * 커밋→AFTER_COMMIT 이벤트→비동기 재색인→READY 수렴의 배선이다.
  *
  * <p>일부러 {@code @Transactional}을 붙이지 않는다 — 재색인은 {@code @TransactionalEventListener(AFTER_COMMIT)} +
  * {@code @Async}로 발화하므로 PUT 트랜잭션이 실제로 커밋돼야 이벤트가 발행된다. 테스트가 끝나면 model_setting(id=1) 행을 원상복구한다(실 DB를
  * 공유하는 다른 테스트에 잔여 영향 방지).
  */
-@SpringBootTest
+@SpringBootTest(properties = "recall.llm.embedding.api-key=sk-smoke-env")
 @AutoConfigureMockMvc
 class SettingsFlowSmokeTest {
 
@@ -35,12 +46,18 @@ class SettingsFlowSmokeTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ModelSettingRepository repository;
 
+    /**
+     * 프로브(SettingsService)와 재색인(SettingsBackedEmbeddingClient)이 공유하는 팩토리 — stub 으로 대체해 무네트워크 보장.
+     */
+    @MockitoBean private EmbeddingClientFactory embeddingClientFactory;
+
     private String originalEmbeddingProvider;
     private String originalEmbeddingModel;
     private String originalEmbeddingStatus;
 
     @BeforeEach
     void captureOriginalRow() {
+        when(embeddingClientFactory.forSettings(any())).thenReturn(new StubEmbeddingClient());
         ModelSetting s = repository.findById(1L).orElseThrow();
         originalEmbeddingProvider = s.getEmbeddingProvider();
         originalEmbeddingModel = s.getEmbeddingModel();
@@ -81,7 +98,8 @@ class SettingsFlowSmokeTest {
                 .andExpect(jsonPath("$.chatModels.anthropic").exists())
                 .andExpect(jsonPath("$.embeddingModels.voyage").exists());
 
-        // 3) 임베딩 provider 변경(키 없음 — stub 경로, 프로브는 StubEmbeddingClient 로 자동 통과) → 재색인 트리거
+        // 3) 임베딩 provider 변경 → 재색인 트리거. P1-b 로 유효 키가 필수인데, env 키를 주입해 요건을 만족하므로
+        //    요청 바디의 apiKey 는 null 로 둔다(팩토리는 MockitoBean 이라 실제 provider 로 나가지 않는다).
         String requestBody =
                 """
                 { "embedding": {"provider": "openai", "model": null, "apiKey": null} }
