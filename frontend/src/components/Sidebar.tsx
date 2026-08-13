@@ -35,6 +35,11 @@ export function Sidebar() {
         <span className="ico">🧠</span> 내 기억
       </NavLink>
 
+      <div className="navlabel">설정</div>
+      <NavLink to="/settings" className={navClass}>
+        <span className="ico">⚙️</span> 설정
+      </NavLink>
+
       <div className="spacer" />
       <div className="userchip">
         <div className="av">이</div>

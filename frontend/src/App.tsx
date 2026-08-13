@@ -6,6 +6,7 @@ import { ReviewListPage } from './pages/ReviewListPage'
 import { ReviewDetailPage } from './pages/ReviewDetailPage'
 import { MemoryListPage } from './pages/MemoryListPage'
 import { MemoryDetailPage } from './pages/MemoryDetailPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/reviews/:id" element={<ReviewDetailPage />} />
           <Route path="/memories" element={<MemoryListPage />} />
           <Route path="/memories/:id" element={<MemoryDetailPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

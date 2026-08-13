@@ -50,6 +50,44 @@ export interface AnswerFragment {
   memoryId: number | null
 }
 
+/** GET /api/settings/models · PUT 응답 — 실제 키는 절대 내려오지 않는다(apiKeyConfigured 불리언만). */
+export type EmbeddingStatus = 'READY' | 'REINDEXING' | 'FAILED'
+
+export interface ModelSettings {
+  provider: string
+  model: string
+  apiKeyConfigured: boolean
+  baseUrl: string | null
+}
+
+export interface EmbeddingModelSettings extends ModelSettings {
+  status: EmbeddingStatus
+}
+
+export interface SettingsResponse {
+  chat: ModelSettings
+  embedding: EmbeddingModelSettings
+}
+
+/** PUT /api/settings/models 요청. 모든 필드 선택 — 생략/공백 = 변경 없음. apiKey는 사용자가 입력했을 때만. */
+export interface ModelUpdate {
+  provider?: string
+  model?: string
+  apiKey?: string
+  baseUrl?: string
+}
+
+export interface SettingsUpdateRequest {
+  chat?: ModelUpdate
+  embedding?: ModelUpdate
+}
+
+/** GET /api/settings/models/catalog — 역할별 provider→모델 목록. 맵 키 = 그 역할에 허용된 provider. */
+export interface CatalogResponse {
+  chatModels: Record<string, string[]>
+  embeddingModels: Record<string, string[]>
+}
+
 /** proposed / structured 안의 KnowledgeCard(추출 스키마). */
 export interface KnowledgeCard {
   title?: string

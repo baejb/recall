@@ -379,8 +379,10 @@ img {
 }
 
 textarea,
+select,
 input[type='text'],
 input[type='email'],
+input[type='url'],
 input[type='password'] {
   width: 100%;
   font-family: inherit;
@@ -392,7 +394,12 @@ input[type='password'] {
   padding: 12px 14px;
   resize: vertical;
 }
+select {
+  resize: none;
+  cursor: pointer;
+}
 textarea:focus,
+select:focus,
 input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

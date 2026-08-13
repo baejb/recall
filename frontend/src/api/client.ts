@@ -2,9 +2,12 @@ import type {
   AnswerFragment,
   ApproveResponse,
   CaptureResponse,
+  CatalogResponse,
   MemoryResponse,
   ReviewCountResponse,
   ReviewItemResponse,
+  SettingsResponse,
+  SettingsUpdateRequest,
 } from './dto'
 
 // 백엔드 호출 창구. 항상 상대경로 /api (dev는 vite 프록시, 배포는 nginx). 실패는 숨기지 않고 예외로.
@@ -48,6 +51,40 @@ export function approveReview(id: number): Promise<ApproveResponse> {
 
 export function rejectReview(id: number): Promise<{ status: string }> {
   return request<{ status: string }>(`/reviews/${id}/reject`, { method: 'POST' })
+}
+
+export function getSettings(signal?: AbortSignal): Promise<SettingsResponse> {
+  return request<SettingsResponse>('/settings/models', { signal })
+}
+
+export function getCatalog(signal?: AbortSignal): Promise<CatalogResponse> {
+  return request<CatalogResponse>('/settings/models/catalog', { signal })
+}
+
+/**
+ * PUT /api/settings/models. 실패(주로 400)는 RFC7807 ProblemDetail 의 `detail`(사람이 읽을 한국어
+ * 메시지)을 뽑아 Error 로 던진다 → 페이지가 그대로 토스트로 노출(조용한 실패 금지). 파싱 실패 시 raw text.
+ */
+export async function updateSettings(body: SettingsUpdateRequest): Promise<SettingsResponse> {
+  const res = await fetch('/api/settings/models', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    let message = text
+    try {
+      const problem = JSON.parse(text) as { detail?: unknown }
+      if (typeof problem.detail === 'string' && problem.detail.trim() !== '') {
+        message = problem.detail
+      }
+    } catch {
+      // ProblemDetail 이 아니면 raw text 를 그대로 쓴다.
+    }
+    throw new Error(message.trim() || `PUT /api/settings/models → ${res.status}`)
+  }
+  return (text ? JSON.parse(text) : undefined) as SettingsResponse
 }
 
 /**
