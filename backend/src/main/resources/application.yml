@@ -2,7 +2,7 @@ spring:
   application:
     name: recall
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/recall}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/recall}
     username: ${SPRING_DATASOURCE_USERNAME:recall}
     password: ${SPRING_DATASOURCE_PASSWORD:recall}
   jpa:
