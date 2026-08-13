@@ -42,9 +42,9 @@ export function KnowledgeCardView({
       )}
 
       {hasFacts && (
-        <div style={{ marginBottom: 14 }}>
+        <div className="kv">
           <div className="k">핵심 사실</div>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
             {facts.map((f, i) => (
               <li key={i} className="v" style={{ marginBottom: 4 }}>
                 {f}
@@ -56,8 +56,8 @@ export function KnowledgeCardView({
 
       {hasKeywords && (
         <div className="row" style={{ marginBottom: 14 }}>
-          {keywords.map((k) => (
-            <span key={k} className="type-tag">
+          {keywords.map((k, i) => (
+            <span key={`${k}-${i}`} className="type-tag">
               {k}
             </span>
           ))}
