@@ -8,9 +8,9 @@ export function ReviewListPage() {
   return (
     <section className="screen">
       <div className="eyebrow">검토함 · 승인 게이트</div>
-      <h1 className="h1">승인 대기 중</h1>
+      <h1 className="h1">검토함</h1>
       <p className="lede">
-        붙여넣은 세션이 대기 중이에요. 열어서 내용을 확인하고 <b>승인</b>하면 내 기억에 저장돼요.
+        붙여넣은 세션을 확인하고 <b>승인</b>하면 내 기억에 저장돼요.
       </p>
 
       {error && (
