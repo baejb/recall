@@ -447,6 +447,17 @@ input[type='password'] {
   padding: 12px 14px;
   resize: vertical;
 }
+/* 물어보기 히어로 입력 — 조금 더 크고 흰 바탕 + 포커스 링 */
+.askinput {
+  font-size: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.askinput:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 select {
   resize: none;
   cursor: pointer;
