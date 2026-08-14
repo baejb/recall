@@ -115,6 +115,11 @@ public class Memory {
         return status;
     }
 
+    /** 상태 전이(불변 원칙: 삭제 대신 상태 보존) — active|archived|incorrect 등. */
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public Double getConfidence() {
         return confidence;
     }

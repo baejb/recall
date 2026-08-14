@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getMemories } from '../api/client'
+import { getMemories, type MemoryStatus } from '../api/client'
 import { toMemory } from '../api/adapter'
 import type { Memory, MemoryTypeKey } from '../types'
 import type { MemoryCounts } from '../api/dto'
@@ -19,8 +19,10 @@ export interface MemoryListState {
   hasMore: boolean
   query: string
   scope: MemoryScope
+  statusView: MemoryStatus // 조회 중인 상태(active=정상, archived=숨김, incorrect=폐기)
   setQuery: (q: string) => void
   setScope: (s: MemoryScope) => void
+  setStatusView: (s: MemoryStatus) => void
   loadMore: () => void
   reload: () => void
 }
@@ -43,6 +45,7 @@ export function useMemoryList(): MemoryListState {
 
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<MemoryScope>('all')
+  const [statusView, setStatusView] = useState<MemoryStatus>('active')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   // 리셋 트리거(reload). 값이 바뀌면 첫 페이지를 다시 읽는다.
   const [reloadKey, setReloadKey] = useState(0)
@@ -62,7 +65,10 @@ export function useMemoryList(): MemoryListState {
     ctrlRef.current?.abort()
     const ctrl = new AbortController()
     ctrlRef.current = ctrl
-    getMemories({ q: debouncedQuery || undefined, type: typeParam, limit: PAGE_SIZE }, ctrl.signal)
+    getMemories(
+      { q: debouncedQuery || undefined, type: typeParam, status: statusView, limit: PAGE_SIZE },
+      ctrl.signal
+    )
       .then((page) => {
         setItems(page.items.map(toMemory))
         setNextCursor(page.nextCursor)
@@ -77,7 +83,7 @@ export function useMemoryList(): MemoryListState {
         if (!ctrl.signal.aborted) setLoading(false)
       })
     return () => ctrl.abort()
-  }, [debouncedQuery, typeParam, reloadKey])
+  }, [debouncedQuery, typeParam, statusView, reloadKey])
 
   const loadMore = useCallback(() => {
     // 이미 진행 중이거나 더 없으면 무시(중복 요청 차단). setState는 이벤트/관찰자 콜백에서 호출 → 허용.
@@ -86,7 +92,13 @@ export function useMemoryList(): MemoryListState {
     ctrlRef.current = ctrl
     setLoadingMore(true)
     getMemories(
-      { q: debouncedQuery || undefined, type: typeParam, cursor: nextCursor, limit: PAGE_SIZE },
+      {
+        q: debouncedQuery || undefined,
+        type: typeParam,
+        status: statusView,
+        cursor: nextCursor,
+        limit: PAGE_SIZE,
+      },
       ctrl.signal
     )
       .then((page) => {
@@ -102,7 +114,7 @@ export function useMemoryList(): MemoryListState {
       .finally(() => {
         if (!ctrl.signal.aborted) setLoadingMore(false)
       })
-  }, [debouncedQuery, typeParam, nextCursor, loading, loadingMore])
+  }, [debouncedQuery, typeParam, statusView, nextCursor, loading, loadingMore])
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), [])
 
@@ -115,8 +127,10 @@ export function useMemoryList(): MemoryListState {
     hasMore: nextCursor !== null,
     query,
     scope,
+    statusView,
     setQuery,
     setScope,
+    setStatusView,
     loadMore,
     reload,
   }

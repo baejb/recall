@@ -76,8 +76,10 @@ export function MemoryListPage() {
     hasMore,
     query,
     scope,
+    statusView,
     setQuery,
     setScope,
+    setStatusView,
     loadMore,
     reload,
   } = useMemoryList()
@@ -138,6 +140,34 @@ export function MemoryListPage() {
         />
       </div>
 
+      {/* 상태 보기 — 숨김(archived)·폐기(incorrect) 항목도 여기서 조회·복원한다(삭제 대신 상태 보존). */}
+      <div className="filters" style={{ marginTop: -8 }}>
+        <span className="eyebrow" style={{ alignSelf: 'center', marginRight: 2 }}>
+          상태
+        </span>
+        <button
+          type="button"
+          className={statusView === 'active' ? 'type-tag on' : 'type-tag'}
+          onClick={() => setStatusView('active')}
+        >
+          활성
+        </button>
+        <button
+          type="button"
+          className={statusView === 'archived' ? 'type-tag on' : 'type-tag'}
+          onClick={() => setStatusView('archived')}
+        >
+          숨김
+        </button>
+        <button
+          type="button"
+          className={statusView === 'incorrect' ? 'type-tag on' : 'type-tag'}
+          onClick={() => setStatusView('incorrect')}
+        >
+          폐기
+        </button>
+      </div>
+
       {error && items.length === 0 ? (
         <div className="card empty">
           <div className="big">
@@ -156,7 +186,29 @@ export function MemoryListPage() {
         <div className="card pad">불러오는 중…</div>
       ) : items.length === 0 ? (
         <div className="card empty">
-          {query ? '검색 결과가 없어요.' : '아직 저장된 기억이 없어요.'}
+          {query ? (
+            <>
+              <p style={{ margin: 0 }}>‘{query}’ 검색 결과가 없어요.</p>
+              {/* 제목엔 없어도 내용으로 답할 수 있으니 물어보기로 이어준다(검색≠질문). */}
+              <div style={{ marginTop: 14 }}>
+                <button
+                  className="btn primary"
+                  onClick={() => navigate(`/?ask=${encodeURIComponent(query)}`)}
+                >
+                  ‘{query}’ 물어보기 →
+                </button>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 0' }}>
+                  제목엔 없어도 내용으로 답할 수 있어요.
+                </p>
+              </div>
+            </>
+          ) : statusView === 'active' ? (
+            '아직 저장된 기억이 없어요.'
+          ) : statusView === 'archived' ? (
+            '숨긴 기억이 없어요.'
+          ) : (
+            '폐기한 기억이 없어요.'
+          )}
         </div>
       ) : (
         <>

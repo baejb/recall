@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.recall.capture.Capture;
 import com.recall.capture.CaptureRepository;
 import com.recall.common.MemoryType;
+import com.recall.memory.dto.MemoryDetailResponse;
 import com.recall.memory.dto.MemoryPageResponse;
 import com.recall.memory.dto.MemoryResponse;
 import java.util.ArrayList;
@@ -63,6 +64,10 @@ class MemoryListPaginationTest {
 
     private static List<String> titles(MemoryPageResponse page) {
         return page.items().stream().map(MemoryResponse::title).toList();
+    }
+
+    private static List<Long> ids(MemoryPageResponse page) {
+        return page.items().stream().map(MemoryResponse::id).toList();
     }
 
     @Test
@@ -161,5 +166,40 @@ class MemoryListPaginationTest {
         MemoryPageResponse one = memoryService.list(TOK, null, null, 1);
         assertEquals(1, one.items().size());
         assertFalse(one.nextCursor() == null);
+    }
+
+    @Test
+    @DisplayName("상태 전이: 숨김→active 목록에서 빠지고 archived로 조회·복원, 폐기(incorrect), 잘못된 status·id는 400·404")
+    void statusTransitionSoftRemoveRestoreDiscard() {
+        Long id = memIds.get(0);
+
+        // 숨김(archived): active 목록에서 빠지고 archived 조회에 뜬다(소프트 제거 — DB엔 보존).
+        MemoryDetailResponse hidden = memoryService.updateStatus(id, "archived");
+        assertEquals("archived", hidden.status());
+        assertFalse(ids(memoryService.list(TOK, null, null, 50)).contains(id));
+        assertTrue(ids(memoryService.list(TOK, null, null, 50, "archived")).contains(id));
+
+        // 복원(active): 다시 active 목록에 나타난다.
+        assertEquals("active", memoryService.updateStatus(id, "active").status());
+        assertTrue(ids(memoryService.list(TOK, null, null, 50)).contains(id));
+
+        // 폐기(incorrect): active에서 빠지고 incorrect 조회에 뜬다.
+        memoryService.updateStatus(id, "incorrect");
+        assertFalse(ids(memoryService.list(TOK, null, null, 50)).contains(id));
+        assertTrue(ids(memoryService.list(TOK, null, null, 50, "incorrect")).contains(id));
+
+        // 잘못된 status → 400
+        ResponseStatusException badStatus =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> memoryService.updateStatus(id, "deleted"));
+        assertEquals(400, badStatus.getStatusCode().value());
+
+        // 없는 id → 404
+        ResponseStatusException missing =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> memoryService.updateStatus(999_999_999L, "archived"));
+        assertEquals(404, missing.getStatusCode().value());
     }
 }

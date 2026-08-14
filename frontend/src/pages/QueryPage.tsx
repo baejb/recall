@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../hooks/useToast'
 import { QueryResult } from '../components/QueryResult'
 
@@ -11,8 +12,12 @@ const EXAMPLES = [
 type Phase = 'home' | 'result'
 
 export function QueryPage() {
-  const [phase, setPhase] = useState<Phase>('home')
-  const [question, setQuestion] = useState('')
+  // 내 기억 검색 무결과 → "물어보기" 브릿지: ?ask= 로 넘어오면 바로 그 질문의 결과 화면으로 시작한다.
+  // (이펙트 동기 setState 회피를 위해 파라미터를 초기 state로 읽는다.)
+  const [searchParams] = useSearchParams()
+  const preset = (searchParams.get('ask') ?? '').trim()
+  const [phase, setPhase] = useState<Phase>(preset ? 'result' : 'home')
+  const [question, setQuestion] = useState(preset)
   const [input, setInput] = useState('')
   const toast = useToast()
 

@@ -29,7 +29,7 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
     @Query(
             """
             SELECT m FROM Memory m
-            WHERE m.status = 'active'
+            WHERE m.status = :status
               AND (:type IS NULL OR m.type = :type)
               AND lower(m.title) LIKE lower(concat('%', :q, '%'))
               AND (:seek = false
@@ -37,7 +37,8 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
                    OR (m.createdAt = :curTs AND m.id < :curId))
             ORDER BY m.createdAt DESC, m.id DESC
             """)
-    List<Memory> findActivePage(
+    List<Memory> findPage(
+            @Param("status") String status,
             @Param("type") MemoryType type,
             @Param("q") String q,
             @Param("seek") boolean seek,
@@ -45,13 +46,14 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
             @Param("curId") Long curId,
             Pageable pageable);
 
-    /** 활성 기억 카운트(유형 탭용). type=null 이면 전체, q 가 있으면 제목 필터 기준. */
+    /** 상태별 기억 카운트(유형 탭용). type=null 이면 전체, q 가 있으면 제목 필터 기준. */
     @Query(
             """
             SELECT count(m) FROM Memory m
-            WHERE m.status = 'active'
+            WHERE m.status = :status
               AND (:type IS NULL OR m.type = :type)
               AND lower(m.title) LIKE lower(concat('%', :q, '%'))
             """)
-    long countActive(@Param("type") MemoryType type, @Param("q") String q);
+    long countByStatus(
+            @Param("status") String status, @Param("type") MemoryType type, @Param("q") String q);
 }

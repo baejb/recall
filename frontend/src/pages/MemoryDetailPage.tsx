@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getMemoryDetail } from '../api/client'
+import { getMemoryDetail, updateMemoryStatus, type MemoryStatus } from '../api/client'
 import { toTypeKey } from '../api/adapter'
 import type { MemoryDetailResponse } from '../api/dto'
+import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
 import { CaptureRawView } from '../components/CaptureRawView'
+
+const STATUS_TOAST: Record<MemoryStatus, string> = {
+  active: '복원했어요',
+  archived: '숨겼어요 — 상태 탭에서 되돌릴 수 있어요',
+  incorrect: '폐기로 표시했어요 — 기록은 보존돼요',
+}
 
 type LoadState =
   | { kind: 'loading' }
@@ -17,8 +24,25 @@ type LoadState =
 export function MemoryDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [retryTick, setRetryTick] = useState(0)
+  const [busy, setBusy] = useState(false)
+
+  // 상태 전이(삭제 대신 상태 보존). 성공 시 반환된 상세로 갱신 → 버튼·배지가 새 상태를 반영한다.
+  const changeStatus = async (next: MemoryStatus) => {
+    if (!id) return
+    setBusy(true)
+    try {
+      const updated = await updateMemoryStatus(id, next)
+      setState({ kind: 'ready', detail: updated })
+      toast(STATUS_TOAST[next])
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '상태 변경에 실패했어요')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   // 이펙트 본문에서 동기 setState를 피해 async IIFE로 감싼다(await 이후에만 setState).
   // loading 초기값은 useState로, 재시도는 아래 retry()가 이벤트 핸들러에서 loading을 켠 뒤 재실행시킨다.
@@ -112,6 +136,11 @@ export function MemoryDetailPage() {
             <span className="dot" style={{ background: `var(${meta.varc})` }} />
             {meta.short}
           </span>
+          {d.status !== 'active' && (
+            <span className={`pill ${d.status === 'archived' ? 'warn' : 'bad'}`}>
+              {d.status === 'archived' ? '숨김' : '폐기'}
+            </span>
+          )}
         </div>
         <div style={{ fontWeight: 700, fontSize: 19, letterSpacing: '-.01em' }}>{d.title}</div>
         <div className="eyebrow" style={{ marginTop: 6 }}>
@@ -128,6 +157,36 @@ export function MemoryDetailPage() {
         </div>
 
         <CaptureRawView key={d.captureId} captureId={d.captureId} />
+
+        <hr className="divider" />
+        <div className="row">
+          {d.status !== 'active' && (
+            <button
+              className="btn primary"
+              disabled={busy}
+              onClick={() => void changeStatus('active')}
+            >
+              원복
+            </button>
+          )}
+          {d.status === 'active' && (
+            <button className="btn" disabled={busy} onClick={() => void changeStatus('archived')}>
+              숨기기
+            </button>
+          )}
+          {d.status !== 'incorrect' && (
+            <button
+              className="btn danger"
+              disabled={busy}
+              onClick={() => void changeStatus('incorrect')}
+            >
+              폐기
+            </button>
+          )}
+        </div>
+        <p className="lede" style={{ fontSize: 12, marginTop: 8 }}>
+          삭제가 아니라 상태를 바꿔요 — 숨기거나 폐기해도 기록은 보존되고 언제든 복원할 수 있어요.
+        </p>
       </div>
     </section>
   )

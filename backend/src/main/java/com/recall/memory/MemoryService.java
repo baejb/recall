@@ -9,6 +9,7 @@ import com.recall.memory.dto.MemoryPageResponse;
 import com.recall.memory.dto.MemoryResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +26,13 @@ public class MemoryService {
 
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 50;
+
+    static final String STATUS_ACTIVE = "active"; // 정상
+    static final String STATUS_ARCHIVED = "archived"; // 숨김(소프트 제거, 복원 가능)
+    static final String STATUS_INCORRECT = "incorrect"; // 폐기(틀린 정보)
+    // 사용자 액션으로 전이·조회 허용하는 상태. (superseded 는 충돌 처리에서 시스템이 설정 — 사용자 액션 대상 아님)
+    private static final Set<String> ALLOWED_STATUSES =
+            Set.of(STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_INCORRECT);
 
     private final MemoryRepository memoryRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -43,6 +51,15 @@ public class MemoryService {
      */
     @Transactional(readOnly = true)
     public MemoryPageResponse list(String q, String type, String cursor, int limit) {
+        return list(q, type, cursor, limit, STATUS_ACTIVE);
+    }
+
+    /**
+     * 상태별 기억 한 페이지(키셋). status=active|archived|incorrect. 목록에서 소프트 제거(숨김·폐기)된 항목도 상태로 조회·복원할 수 있다.
+     */
+    @Transactional(readOnly = true)
+    public MemoryPageResponse list(String q, String type, String cursor, int limit, String status) {
+        String st = requireStatus(status);
         int requested = limit <= 0 ? DEFAULT_LIMIT : limit;
         int size = Math.min(Math.max(requested, 1), MAX_LIMIT);
         MemoryType typeFilter = parseType(type);
@@ -53,7 +70,8 @@ public class MemoryService {
 
         // limit+1 개를 요청해, 초과분 존재로 다음 페이지 유무를 한 번의 쿼리로 판단한다.
         List<Memory> rows =
-                memoryRepository.findActivePage(
+                memoryRepository.findPage(
+                        st,
                         typeFilter,
                         qNorm,
                         cur != null,
@@ -76,11 +94,36 @@ public class MemoryService {
         if (cur == null) {
             counts =
                     new MemoryCounts(
-                            memoryRepository.countActive(null, qNorm),
-                            memoryRepository.countActive(MemoryType.TROUBLESHOOTING, qNorm),
-                            memoryRepository.countActive(MemoryType.KNOWLEDGE, qNorm));
+                            memoryRepository.countByStatus(st, null, qNorm),
+                            memoryRepository.countByStatus(st, MemoryType.TROUBLESHOOTING, qNorm),
+                            memoryRepository.countByStatus(st, MemoryType.KNOWLEDGE, qNorm));
         }
         return new MemoryPageResponse(items, nextCursor, counts);
+    }
+
+    /**
+     * 기억 상태 전이(불변 원칙: 삭제 대신 상태 보존). active↔archived(숨김)↔incorrect(폐기)를 자유롭게 오갈 수 있어, 소프트 제거·복원·폐기를
+     * 모두 상태로 표현한다. 없는 id는 404, 허용되지 않은 status는 400.
+     */
+    @Transactional
+    public MemoryDetailResponse updateStatus(Long id, String status) {
+        String st = requireStatus(status);
+        Memory memory =
+                memoryRepository
+                        .findById(id)
+                        .orElseThrow(
+                                () ->
+                                        new ResponseStatusException(
+                                                HttpStatus.NOT_FOUND, "없는 memory: " + id));
+        memory.setStatus(st);
+        return toDetailResponse(memoryRepository.save(memory));
+    }
+
+    private static String requireStatus(String status) {
+        if (status == null || !ALLOWED_STATUSES.contains(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 status: " + status);
+        }
+        return status;
     }
 
     /**
