@@ -138,34 +138,34 @@ export function MemoryListPage() {
           dotVar="--kn"
           onClick={() => setScope('kn')}
         />
-      </div>
 
-      {/* 상태 보기 — 숨김(archived)·폐기(incorrect) 항목도 여기서 조회·복원한다(삭제 대신 상태 보존). */}
-      <div className="filters" style={{ marginTop: -8 }}>
-        <span className="eyebrow" style={{ alignSelf: 'center', marginRight: 2 }}>
-          상태
-        </span>
-        <button
-          type="button"
-          className={statusView === 'active' ? 'type-tag on' : 'type-tag'}
-          onClick={() => setStatusView('active')}
-        >
-          활성
-        </button>
-        <button
-          type="button"
-          className={statusView === 'archived' ? 'type-tag on' : 'type-tag'}
-          onClick={() => setStatusView('archived')}
-        >
-          숨김
-        </button>
-        <button
-          type="button"
-          className={statusView === 'incorrect' ? 'type-tag on' : 'type-tag'}
-          onClick={() => setStatusView('incorrect')}
-        >
-          폐기
-        </button>
+        {/* 상태 보기(우측) — 숨김·폐기 항목도 여기서 조회·복원(삭제 대신 상태 보존). 유형필터와 다른 축이라 가벼운 텍스트 토글로 구분. */}
+        <div className="statusview">
+          <span className="eyebrow">보기</span>
+          <button
+            type="button"
+            className={statusView === 'active' ? 'sv on' : 'sv'}
+            onClick={() => setStatusView('active')}
+          >
+            활성
+          </button>
+          <span className="sep">·</span>
+          <button
+            type="button"
+            className={statusView === 'archived' ? 'sv on' : 'sv'}
+            onClick={() => setStatusView('archived')}
+          >
+            숨김
+          </button>
+          <span className="sep">·</span>
+          <button
+            type="button"
+            className={statusView === 'incorrect' ? 'sv on' : 'sv'}
+            onClick={() => setStatusView('incorrect')}
+          >
+            폐기
+          </button>
+        </div>
       </div>
 
       {error && items.length === 0 ? (

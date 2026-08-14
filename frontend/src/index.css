@@ -796,6 +796,36 @@ input:focus {
   flex-wrap: wrap;
   margin-bottom: 20px;
 }
+/* 상태 보기 — 유형필터 같은 줄 우측에, 유형 pill보다 가벼운 텍스트 토글로(다른 축임을 구분). */
+.statusview {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.statusview .eyebrow {
+  margin-right: 2px;
+}
+.statusview .sv {
+  background: none;
+  border: 0;
+  padding: 2px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.statusview .sv:hover {
+  color: var(--text-muted);
+}
+.statusview .sv.on {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.statusview .sep {
+  color: var(--border-strong);
+  font-size: 11px;
+}
 
 .listrow {
   display: flex;
