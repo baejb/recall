@@ -53,6 +53,10 @@ public class AnswerStreamer {
                 return;
             }
 
+            boolean llm = pipeline.llmReady();
+            // RR: LLM 경로에서만 재정렬(실패/미가용 시 W 순서 유지). 이후 답변·citation은 이 evidence 순서를 따른다.
+            List<Memory> evidence = llm ? pipeline.rerank(question, candidates) : candidates;
+
             boolean[] sentText = {false};
             StringBuilder answer = new StringBuilder();
             Consumer<String> textSink =
@@ -66,9 +70,9 @@ public class AnswerStreamer {
                     };
 
             boolean composed = false;
-            if (pipeline.llmReady()) {
+            if (llm) {
                 try {
-                    pipeline.composeStreaming(question, candidates, textSink);
+                    pipeline.composeStreaming(question, evidence, textSink);
                     composed = true;
                 } catch (UncheckedIOException clientGone) {
                     throw clientGone; // 클라이언트 끊김 → 바깥에서 completeWithError
@@ -82,13 +86,13 @@ public class AnswerStreamer {
                 // LLM이 "기록 없음"으로 답했으면(근거가 질문에 답 못 함) 근거를 붙이지 않는다 — 모순된 표시 방지.
                 if (!isNoRecord(answer.toString())) {
                     // LLM 답(완성/부분) 뒤에 근거 citation을 붙인다(text 없이 memoryId만).
-                    for (Memory m : candidates) {
+                    for (Memory m : evidence) {
                         sendFragment(emitter, new AnswerFragment("", m.getId()));
                     }
                 }
             } else {
                 // 격하: 각 근거의 요약(text+memoryId) — 근거에 매인 나열.
-                for (AnswerFragment fragment : pipeline.fallbackFragments(candidates)) {
+                for (AnswerFragment fragment : pipeline.fallbackFragments(evidence)) {
                     sendFragment(emitter, fragment);
                 }
             }

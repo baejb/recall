@@ -35,6 +35,7 @@ class AnswerStreamerTest {
         new AnswerStreamer(pipeline).emit(emitter, "q");
 
         verify(pipeline, never()).llmReady();
+        verify(pipeline, never()).rerank(any(), anyList());
         verify(pipeline, never()).composeStreaming(any(), anyList(), any());
         verify(pipeline, never()).fallbackFragments(any());
         verify(emitter).send(any(SseEmitter.SseEventBuilder.class));
@@ -54,6 +55,7 @@ class AnswerStreamerTest {
 
         new AnswerStreamer(pipeline).emit(emitter, "q");
 
+        verify(pipeline, never()).rerank(any(), anyList()); // 미가용 → RR 미실행
         verify(pipeline, never()).composeStreaming(any(), anyList(), any());
         verify(pipeline).fallbackFragments(candidates);
         verify(emitter).complete();
@@ -67,6 +69,7 @@ class AnswerStreamerTest {
         List<Memory> candidates = List.of(memory());
         when(pipeline.retrieve("q")).thenReturn(candidates);
         when(pipeline.llmReady()).thenReturn(true);
+        when(pipeline.rerank(eq("q"), anyList())).thenReturn(candidates); // RR → 재정렬된 근거
         doAnswer(
                         inv -> {
                             Consumer<String> sink = inv.getArgument(2);
@@ -78,6 +81,7 @@ class AnswerStreamerTest {
 
         new AnswerStreamer(pipeline).emit(emitter, "q");
 
+        verify(pipeline).rerank(eq("q"), anyList());
         verify(pipeline).composeStreaming(eq("q"), anyList(), any());
         verify(pipeline, never()).fallbackFragments(any());
         verify(emitter).complete();
