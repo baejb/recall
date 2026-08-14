@@ -7,7 +7,7 @@ import type { MemoryCounts } from '../api/dto'
 /** 목록 유형 필터. 'all' = 전체(필터 없음). */
 export type MemoryScope = 'all' | MemoryTypeKey
 
-const PAGE_SIZE = 20
+export const PAGE_SIZE = 20
 const SEARCH_DEBOUNCE_MS = 300
 
 export interface MemoryListState {

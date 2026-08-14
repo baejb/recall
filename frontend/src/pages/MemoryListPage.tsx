@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMemoryList } from '../hooks/useMemoryList'
+import { useMemoryList, PAGE_SIZE } from '../hooks/useMemoryList'
 import { memSummary } from '../lib/search'
 import { TYPE_META } from '../lib/typeMeta'
 import { StatusPill } from '../components/StatusPill'
@@ -188,7 +188,8 @@ export function MemoryListPage() {
               </button>
             </div>
           )}
-          {!hasMore && (
+          {/* end-of-list 표시는 실제로 페이지가 넘어간(한 페이지 초과) 목록에서만 — 짧은 목록엔 노이즈. */}
+          {!hasMore && items.length > PAGE_SIZE && (
             <p className="lede" style={{ textAlign: 'center', marginTop: 16 }}>
               마지막이에요.
             </p>
