@@ -16,4 +16,10 @@ public class StubLlmClient implements LlmClient {
         log.warn("[STUB] LlmClient.complete 호출 — 실제 LLM 미연동, placeholder 반환");
         return "[stub-llm-response]";
     }
+
+    /** stub은 실제 LLM이 아니다 — 답변합성(A)은 이 값을 보고 결정론 폴백으로 격하한다(placeholder 유출 방지). */
+    @Override
+    public boolean available() {
+        return false;
+    }
 }
