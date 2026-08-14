@@ -8,7 +8,6 @@ import com.recall.capture.CaptureRepository;
 import com.recall.common.MemoryType;
 import com.recall.common.StrategyRegistry;
 import com.recall.memory.Memory;
-import com.recall.memory.type.ExtractionStrategy;
 import com.recall.memory.type.Judgement;
 import com.recall.memory.type.SimilarityJudgeStrategy;
 import com.recall.memory.type.Verdict;
@@ -38,7 +37,7 @@ public class StorePipeline {
     private final CaptureRepository captureRepository;
     private final ReviewRepository reviewRepository;
     private final SimilarMemoryFinder similarMemoryFinder;
-    private final StrategyRegistry<ExtractionStrategy> extractions;
+    private final LongContextExtractor longContextExtractor;
     private final StrategyRegistry<SimilarityJudgeStrategy> judges;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -46,12 +45,12 @@ public class StorePipeline {
             CaptureRepository captureRepository,
             ReviewRepository reviewRepository,
             SimilarMemoryFinder similarMemoryFinder,
-            List<ExtractionStrategy> extractionStrategies,
+            LongContextExtractor longContextExtractor,
             List<SimilarityJudgeStrategy> judgeStrategies) {
         this.captureRepository = captureRepository;
         this.reviewRepository = reviewRepository;
         this.similarMemoryFinder = similarMemoryFinder;
-        this.extractions = new StrategyRegistry<>(extractionStrategies);
+        this.longContextExtractor = longContextExtractor;
         this.judges = new StrategyRegistry<>(judgeStrategies);
     }
 
@@ -77,8 +76,8 @@ public class StorePipeline {
             MemoryType type = classify(event.maskedText());
 
             stage = "extract";
-            Map<String, Object> structured =
-                    extractions.get(type).extract(event.maskedText()); // S2
+            // S2/S3 — 짧으면 단일 패스, 길면 긴맥락 Map-Reduce(청킹→조각추출→병합).
+            Map<String, Object> structured = longContextExtractor.extract(type, event.maskedText());
 
             stage = "judge";
             // S4 — 유사 기존 기억을 찾아 대조 판정. 후보가 없으면 빈 맵을 넘겨 NEW로 귀결.
