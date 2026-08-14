@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useSettings } from '../hooks/useSettings'
 import { useToast } from '../hooks/useToast'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -93,6 +93,7 @@ function ModelSection(props: ModelSectionProps) {
     badge,
     warning,
   } = props
+  const modelListId = useId()
   return (
     <div className="card pad" style={{ marginBottom: 16 }}>
       <div className="between" style={{ marginBottom: 12 }}>
@@ -113,17 +114,24 @@ function ModelSection(props: ModelSectionProps) {
       <label className="field-label" style={{ marginTop: 14 }}>
         모델
       </label>
-      <select value={form.model} onChange={(e) => onModelChange(e.target.value)}>
-        {/* 현재 값이 목록에 없으면(미설정 등) 셀렉트 표시와 상태가 어긋나지 않게 항목을 보강한다. */}
-        {!modelsForProvider.includes(form.model) && (
-          <option value={form.model}>{form.model === '' ? '(모델 선택)' : form.model}</option>
-        )}
+      {/* 추천 목록은 자동완성(datalist)으로 제안하되, provider가 지원하는 모델명은 직접 입력할 수도 있다
+          (백엔드는 provider 등록만 검증하고 모델명은 검증하지 않음 — 새 모델을 배포 없이 쓸 수 있게). */}
+      <input
+        type="text"
+        list={modelListId}
+        value={form.model}
+        autoComplete="off"
+        placeholder="추천에서 고르거나 모델명 직접 입력"
+        onChange={(e) => onModelChange(e.target.value)}
+      />
+      <datalist id={modelListId}>
         {modelsForProvider.map((m) => (
-          <option key={m} value={m}>
-            {m}
-          </option>
+          <option key={m} value={m} />
         ))}
-      </select>
+      </datalist>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+        추천 목록에서 고르거나, provider가 지원하는 모델명을 직접 입력할 수 있어요.
+      </p>
 
       <label className="field-label" style={{ marginTop: 14 }}>
         API 키
