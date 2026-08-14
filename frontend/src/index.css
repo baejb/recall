@@ -458,6 +458,20 @@ input[type='password'] {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+/* 모델 필드 — 드롭다운 화살표(셰브론)는 그대로 두고 자유 입력도 가능. datalist가 추천을 제안한다. */
+.model-input {
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238996a2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+/* Chrome/Edge의 기본 datalist 화살표는 투명하게 하되(중복 방지) 클릭 영역은 유지 — 우리 셰브론 위에서 목록을 연다. */
+.model-input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
+  width: 24px;
+}
 select {
   resize: none;
   cursor: pointer;

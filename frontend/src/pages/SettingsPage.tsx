@@ -118,6 +118,7 @@ function ModelSection(props: ModelSectionProps) {
           (백엔드는 provider 등록만 검증하고 모델명은 검증하지 않음 — 새 모델을 배포 없이 쓸 수 있게). */}
       <input
         type="text"
+        className="model-input"
         list={modelListId}
         value={form.model}
         autoComplete="off"
