@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
 import com.recall.llm.LlmClient;
 import com.recall.memory.Memory;
+import com.recall.memory.type.AnswerContribution;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +18,28 @@ class QueryPipelineTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    /** rerank/compose는 searchService를 쓰지 않으므로 null로 둔다(생성만; 호출 안 함). */
+    /** rerank/parseType은 searchService·answers를 쓰지 않으므로 null·빈 목록으로 둔다(생성만; 호출 안 함). */
     private QueryPipeline pipelineWithLlm(LlmClient llm) {
         return new QueryPipeline(null, List.of(), llm);
+    }
+
+    /** classify는 등록된 유형(answers) 기준으로 분류하므로, 지원 유형 조합을 주입해 만든다. */
+    private QueryPipeline pipelineWith(List<AnswerContribution> answers, LlmClient llm) {
+        return new QueryPipeline(null, answers, llm);
+    }
+
+    private static AnswerContribution answerFor(MemoryType t) {
+        return new AnswerContribution() {
+            @Override
+            public MemoryType supports() {
+                return t;
+            }
+
+            @Override
+            public String render(Map<String, Object> memory) {
+                return "";
+            }
+        };
     }
 
     private static Memory mem(int i) {
@@ -111,5 +132,74 @@ class QueryPipelineTest {
         QueryPipeline p = pipelineWithLlm((s, u) -> "[1]");
         List<Memory> in = List.of(mem(1));
         assertEquals(in, p.rerank("q", in));
+    }
+
+    // ── C 분류 ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("parseType: 트러블슈팅 신호가 있으면 TS, 없으면 기본 KNOWLEDGE")
+    void parsesType() {
+        assertEquals(MemoryType.TROUBLESHOOTING, QueryPipeline.parseType("TROUBLESHOOTING"));
+        assertEquals(MemoryType.TROUBLESHOOTING, QueryPipeline.parseType("트러블슈팅 같아요"));
+        assertEquals(MemoryType.KNOWLEDGE, QueryPipeline.parseType("KNOWLEDGE"));
+        assertEquals(MemoryType.KNOWLEDGE, QueryPipeline.parseType("아무말"));
+        assertEquals(MemoryType.KNOWLEDGE, QueryPipeline.parseType(null));
+    }
+
+    private static final List<AnswerContribution> BOTH_TYPES =
+            List.of(answerFor(MemoryType.KNOWLEDGE), answerFor(MemoryType.TROUBLESHOOTING));
+
+    @Test
+    @DisplayName("classify: 지원 유형이 2개면 LLM 출력대로 판정")
+    void classifyUsesLlmWhenMultipleTypes() {
+        assertEquals(
+                MemoryType.TROUBLESHOOTING,
+                pipelineWith(BOTH_TYPES, (s, u) -> "TROUBLESHOOTING")
+                        .classify("그 403 에러 어떻게 풀었지?"));
+        assertEquals(
+                MemoryType.KNOWLEDGE,
+                pipelineWith(BOTH_TYPES, (s, u) -> "KNOWLEDGE").classify("RRF가 뭐야?"));
+    }
+
+    @Test
+    @DisplayName("classify: 지원 유형이 1개면 LLM 안 부르고 그 유형(안전 가드 — TS 전략 미구현 시 파이프라인 보호)")
+    void classifySkipsLlmWhenSingleType() {
+        QueryPipeline p =
+                pipelineWith(
+                        List.of(answerFor(MemoryType.KNOWLEDGE)),
+                        (s, u) -> {
+                            throw new AssertionError("단일 유형인데 complete 호출됨");
+                        });
+        assertEquals(MemoryType.KNOWLEDGE, p.classify("그 403 에러 어떻게 풀었지?"));
+    }
+
+    @Test
+    @DisplayName("classify: LLM 미가용 → 기본 KNOWLEDGE(격하, complete 미호출)")
+    void classifyDegradesWhenUnavailable() {
+        LlmClient off =
+                new LlmClient() {
+                    @Override
+                    public String complete(String system, String user) {
+                        throw new AssertionError("미가용인데 complete 호출됨");
+                    }
+
+                    @Override
+                    public boolean available() {
+                        return false;
+                    }
+                };
+        assertEquals(MemoryType.KNOWLEDGE, pipelineWith(BOTH_TYPES, off).classify("q"));
+    }
+
+    @Test
+    @DisplayName("classify: LLM 예외 → 기본 KNOWLEDGE(격하)")
+    void classifyDegradesOnException() {
+        QueryPipeline p =
+                pipelineWith(
+                        BOTH_TYPES,
+                        (s, u) -> {
+                            throw new RuntimeException("boom");
+                        });
+        assertEquals(MemoryType.KNOWLEDGE, p.classify("q"));
     }
 }

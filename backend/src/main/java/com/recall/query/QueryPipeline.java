@@ -26,8 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 조회 파이프라인: 질문 → 분류(C) → 하이브리드 검색(R·W) → 리랭크(RR) → 답변(A). 답변은 저장된 근거(memory)에 매이고, 근거가 없으면 지어내지 않고
  * 빈 결과(상위가 "기록 없음")를 낸다.
  *
- * <p>분류(C)는 아직 stub(기본 KNOWLEDGE), 검색(R·W)은 vector+BM25 융합(결정론). 리랭크(RR)는 W 상위 후보를 LLM이 질문 관련도로
- * 재정렬한다(실패/미가용 시 W 순서 유지 — 격하). 답변(A)은 근거만으로 LLM이 재구성해 토큰 단위로 스트리밍한다(미가용/실패 시 요약 격하).
+ * <p>분류(C)는 LLM이 질문 유형을 판정하되 <b>등록된 유형이 1개뿐이면 LLM 없이 그 유형</b>으로 격하한다(TS 전략이 자가등록되면 자동 활성화).
+ * 검색(R·W)은 vector+BM25 융합(결정론). 리랭크(RR)는 W 상위 후보를 LLM이 질문 관련도로 재정렬한다(실패/미가용 시 W 순서 유지 — 격하). 답변(A)은
+ * 근거만으로 LLM이 재구성해 토큰 단위로 스트리밍한다(미가용/실패 시 요약 격하).
  */
 @Component
 public class QueryPipeline {
@@ -39,6 +40,13 @@ public class QueryPipeline {
 
     /** RR 후 A에 넘길 최대 근거 수(토큰 통제·근거 품질). */
     static final int RR_OUTPUT_MAX = 6;
+
+    /** C(분류) 시스템 프롬프트 — 질문 유형을 한 단어로. */
+    static final String CLASSIFY_SYSTEM =
+            """
+            다음 질문이 '트러블슈팅'(에러·장애·버그·실패의 원인/해결 회상)인지, '지식'(개념·정의·방법·결정 등 그 외)인지 분류한다.
+            TROUBLESHOOTING 또는 KNOWLEDGE 중 한 단어만 출력한다.
+            """;
 
     /** RR(리랭크) 시스템 프롬프트 — 관련도 순 번호 배열만 출력. */
     static final String RERANK_SYSTEM =
@@ -73,13 +81,47 @@ public class QueryPipeline {
     }
 
     /**
-     * 분류(C) + 하이브리드 검색(R·W) → 근거 후보. 트랜잭션은 여기까지만 잡고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된
+     * C — 질문 유형 분류(🔵 확률적). <b>지원되는 유형으로만</b> 분류한다: 전략이 등록된 유형이 1개뿐이면(현재 KNOWLEDGE만) 분류가 무의미하므로
+     * LLM을 부르지 않고 그 유형을 반환한다 — 새 유형(예: TROUBLESHOOTING) 전략이 자가등록되면 자동으로 분류가 켜진다. LLM 미가용/실패/미지원 유형
+     * 출력은 기본 유형으로 격하한다(조용한 실패 금지). 유형별로 검색 표현·플랜 가중치·답변 전략이 갈린다.
+     */
+    public MemoryType classify(String question) {
+        Set<MemoryType> supported = answers.registered();
+        MemoryType fallback =
+                supported.isEmpty() || supported.contains(MemoryType.KNOWLEDGE)
+                        ? MemoryType.KNOWLEDGE
+                        : supported.iterator().next();
+        if (supported.size() <= 1 || !llmClient.available()) {
+            return fallback; // 유형이 하나뿐이거나 LLM 미가용 → 분류 불필요/불가
+        }
+        try {
+            MemoryType type = parseType(llmClient.complete(CLASSIFY_SYSTEM, question));
+            return supported.contains(type) ? type : fallback; // 미지원 유형이면 격하
+        } catch (RuntimeException e) {
+            log.warn("C 분류 실패 → 기본 {}: {}", fallback, e.getMessage());
+            return fallback;
+        }
+    }
+
+    /**
+     * 하이브리드 검색(R·W) → 근거 후보(주어진 유형으로). 트랜잭션은 검색 쿼리에만 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된
      * memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
      */
     @Transactional(readOnly = true)
-    public List<Memory> retrieve(String question) {
-        MemoryType type = classify(question); // C
-        return searchService.search(question, type); // R·W
+    public List<Memory> retrieve(String question, MemoryType type) {
+        return searchService.search(question, type);
+    }
+
+    /** LLM 분류 출력에서 유형을 뽑는다. 트러블슈팅 신호가 없으면 기본 KNOWLEDGE. */
+    static MemoryType parseType(String out) {
+        if (out == null) {
+            return MemoryType.KNOWLEDGE;
+        }
+        String u = out.toUpperCase();
+        if (u.contains("TROUBLE") || out.contains("트러블") || out.contains("트슈")) {
+            return MemoryType.TROUBLESHOOTING;
+        }
+        return MemoryType.KNOWLEDGE;
     }
 
     /** 실제 LLM(비-stub)이 연동됐는지 — 답변 경로가 LLM 합성 vs 결정론 폴백을 고른다. */
@@ -217,11 +259,6 @@ public class QueryPipeline {
             sb.append('\n');
         }
         return sb.toString();
-    }
-
-    private MemoryType classify(String question) {
-        // TODO(Phase 1): 다차원 분류(C). 지금은 기본 KNOWLEDGE.
-        return MemoryType.KNOWLEDGE;
     }
 
     private Map<String, Object> parse(String json) {

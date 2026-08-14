@@ -1,5 +1,6 @@
 package com.recall.query;
 
+import com.recall.common.MemoryType;
 import com.recall.memory.Memory;
 import com.recall.query.dto.AnswerFragment;
 import java.io.IOException;
@@ -44,7 +45,8 @@ public class AnswerStreamer {
 
     void emit(SseEmitter emitter, String question) {
         try {
-            List<Memory> candidates = pipeline.retrieve(question);
+            MemoryType type = pipeline.classify(question); // C — 질문 유형(지식/트슈)
+            List<Memory> candidates = pipeline.retrieve(question, type); // R·W
             if (candidates.isEmpty()) {
                 // 근거 없음 → 지어내지 않고 "기록 없음"(LLM 미호출).
                 emitter.send(

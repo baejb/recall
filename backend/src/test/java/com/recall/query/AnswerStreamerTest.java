@@ -30,7 +30,8 @@ class AnswerStreamerTest {
     void noEvidenceSkipsLlm() throws Exception {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
-        when(pipeline.retrieve("q")).thenReturn(List.of());
+        when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
+        when(pipeline.retrieve(eq("q"), any())).thenReturn(List.of());
 
         new AnswerStreamer(pipeline).emit(emitter, "q");
 
@@ -48,7 +49,8 @@ class AnswerStreamerTest {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
         List<Memory> candidates = List.of(memory());
-        when(pipeline.retrieve("q")).thenReturn(candidates);
+        when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
+        when(pipeline.retrieve(eq("q"), any())).thenReturn(candidates);
         when(pipeline.llmReady()).thenReturn(false);
         when(pipeline.fallbackFragments(candidates))
                 .thenReturn(List.of(new AnswerFragment("요약", 1L)));
@@ -67,7 +69,8 @@ class AnswerStreamerTest {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
         List<Memory> candidates = List.of(memory());
-        when(pipeline.retrieve("q")).thenReturn(candidates);
+        when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
+        when(pipeline.retrieve(eq("q"), any())).thenReturn(candidates);
         when(pipeline.llmReady()).thenReturn(true);
         when(pipeline.rerank(eq("q"), anyList())).thenReturn(candidates); // RR → 재정렬된 근거
         doAnswer(
