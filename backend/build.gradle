@@ -39,6 +39,19 @@ tasks.named('test') {
 	useJUnitPlatform()
 }
 
+// 🔴 릴리스 차단 게이트만 실행: ./gradlew releaseGate
+// PRD 치명 3종 회귀 — 민감정보 유출(마스킹 잔존 0)·충돌 자동 덮어쓰기·근거 없는 생성.
+// @Tag("release-gate") 붙은 테스트만 돌린다(DB 필요한 케이스 포함).
+tasks.register('releaseGate', Test) {
+	description = '릴리스 차단 게이트(🔴) 회귀 테스트만 실행'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'release-gate'
+	}
+}
+
 // 기존 코드가 4칸 들여쓰기이므로 google-java-format 의 AOSP(4칸) 스타일로 맞춘다.
 // 포맷 검사: ./gradlew spotlessCheck   ·   자동 정리: ./gradlew spotlessApply
 spotless {

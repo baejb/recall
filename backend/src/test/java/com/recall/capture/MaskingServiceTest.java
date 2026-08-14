@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.recall.capture.MaskingService.MaskResult;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -148,6 +149,7 @@ class MaskingServiceTest {
     // ── 🔴 릴리스 차단: 잔존 0 배터리 ─────────────────────────
 
     @Test
+    @Tag("release-gate")
     @DisplayName("🔴 시크릿 배터리 — 마스킹 후 원문 잔존 0")
     void zeroResidueAcrossBattery() {
         List<String> secrets =

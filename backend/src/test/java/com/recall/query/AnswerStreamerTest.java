@@ -15,6 +15,7 @@ import com.recall.query.dto.AnswerFragment;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -26,6 +27,7 @@ class AnswerStreamerTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("🔴 근거 없음 → LLM 미호출, '기록 없음'만 보내고 완료(근거 없는 생성 금지)")
     void noEvidenceSkipsLlm() throws Exception {
         QueryPipeline pipeline = mock(QueryPipeline.class);
