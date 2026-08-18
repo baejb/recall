@@ -27,7 +27,7 @@ class CaptureRepositoryTest {
     }
 
     private Capture seed(String status) {
-        Capture c = captureRepository.save(new Capture("chat", "마스킹된 원문", "[]"));
+        Capture c = captureRepository.save(new Capture(1L, "chat", "마스킹된 원문", "[]"));
         created.add(c.getId());
         if (!"PROCESSING".equals(status)) {
             c.setStatus(status);
@@ -56,7 +56,8 @@ class CaptureRepositoryTest {
 
         List<Long> ids =
                 captureRepository
-                        .findByStatusInOrderByCreatedAtDesc(List.of("PROCESSING", "FAILED"))
+                        .findByUserIdAndStatusInOrderByCreatedAtDesc(
+                                1L, List.of("PROCESSING", "FAILED"))
                         .stream()
                         .map(Capture::getId)
                         .toList();

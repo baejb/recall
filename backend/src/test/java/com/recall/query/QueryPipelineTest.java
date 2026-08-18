@@ -43,7 +43,7 @@ class QueryPipelineTest {
     }
 
     private static Memory mem(int i) {
-        return new Memory(null, MemoryType.KNOWLEDGE, "t" + i, "{\"title\":\"t" + i + "\"}");
+        return Memory.transientCard(MemoryType.KNOWLEDGE, "t" + i, "{\"title\":\"t" + i + "\"}");
     }
 
     private static List<String> titles(List<Memory> memories) {
@@ -56,8 +56,7 @@ class QueryPipelineTest {
     @DisplayName("A 프롬프트에 질문 + 번호 매긴 근거의 제목·요약·사실이 담긴다")
     void evidencePromptCarriesQuestionAndEvidence() {
         Memory m =
-                new Memory(
-                        null,
+                Memory.transientCard(
                         MemoryType.KNOWLEDGE,
                         "게이트웨이 분리",
                         "{\"title\":\"게이트웨이 분리\",\"summary\":\"토폴로지 분리는 끝났다\","

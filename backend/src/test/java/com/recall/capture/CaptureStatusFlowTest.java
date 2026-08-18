@@ -126,7 +126,7 @@ class CaptureStatusFlowTest {
     }
 
     private Capture seedRawTextCapture(String status, String rawText) {
-        Capture c = captureRepository.save(new Capture("chat", rawText, "[]"));
+        Capture c = captureRepository.save(new Capture(1L, "chat", rawText, "[]"));
         createdCaptures.add(c.getId());
         if (!"PROCESSING".equals(status)) {
             c.setStatus(status);

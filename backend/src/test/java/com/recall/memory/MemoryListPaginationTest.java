@@ -9,7 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.recall.capture.Capture;
 import com.recall.capture.CaptureRepository;
+import com.recall.common.BadRequestException;
 import com.recall.common.MemoryType;
+import com.recall.common.NotFoundException;
 import com.recall.memory.dto.MemoryDetailResponse;
 import com.recall.memory.dto.MemoryPageResponse;
 import com.recall.memory.dto.MemoryResponse;
@@ -21,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 기억 목록 키셋 페이지네이션의 실 DB 계약. 공유 테이블을 쓰므로 고유 토큰(TOK)을 제목에 넣고 q=TOK 로 이 테스트가 만든 행만 격리해 검증한다(선행 데이터에
@@ -42,7 +43,7 @@ class MemoryListPaginationTest {
     /** TOK 1..5 를 순서대로 저장(@CreationTimestamp·IDENTITY 로 뒤 저장일수록 최신·큰 id). kn: 1,3,5 / ts: 2,4. */
     @BeforeEach
     void seed() {
-        Capture c = captureRepository.save(new Capture("chat", "마스킹된 원문", "[]"));
+        Capture c = captureRepository.save(new Capture(1L, "chat", "마스킹된 원문", "[]"));
         captureId = c.getId();
         for (int i = 1; i <= 5; i++) {
             MemoryType type = (i % 2 == 1) ? MemoryType.KNOWLEDGE : MemoryType.TROUBLESHOOTING;
@@ -141,17 +142,11 @@ class MemoryListPaginationTest {
     @Test
     @DisplayName("잘못된 커서·유형은 400")
     void rejectsBadCursorAndType() {
-        ResponseStatusException badCursor =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () -> memoryService.list(null, null, "!!!broken!!!", 20));
-        assertEquals(400, badCursor.getStatusCode().value());
+        assertThrows(
+                BadRequestException.class,
+                () -> memoryService.list(null, null, "!!!broken!!!", 20));
 
-        ResponseStatusException badType =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () -> memoryService.list(null, "nope", null, 20));
-        assertEquals(400, badType.getStatusCode().value());
+        assertThrows(BadRequestException.class, () -> memoryService.list(null, "nope", null, 20));
     }
 
     @Test
@@ -188,18 +183,12 @@ class MemoryListPaginationTest {
         assertFalse(ids(memoryService.list(TOK, null, null, 50)).contains(id));
         assertTrue(ids(memoryService.list(TOK, null, null, 50, "incorrect")).contains(id));
 
-        // 잘못된 status → 400
-        ResponseStatusException badStatus =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () -> memoryService.updateStatus(id, "deleted"));
-        assertEquals(400, badStatus.getStatusCode().value());
+        // 잘못된 status → 400(BadRequestException)
+        assertThrows(BadRequestException.class, () -> memoryService.updateStatus(id, "deleted"));
 
-        // 없는 id → 404
-        ResponseStatusException missing =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () -> memoryService.updateStatus(999_999_999L, "archived"));
-        assertEquals(404, missing.getStatusCode().value());
+        // 없는 id → 404(NotFoundException)
+        assertThrows(
+                NotFoundException.class,
+                () -> memoryService.updateStatus(999_999_999L, "archived"));
     }
 }

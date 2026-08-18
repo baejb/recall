@@ -114,7 +114,7 @@ class MemoryDetailFlowTest {
     }
 
     private Memory seedMemory(String title, String structuredJson) {
-        Capture capture = captureRepository.save(new Capture("chat", "마스킹된 원문", "[]"));
+        Capture capture = captureRepository.save(new Capture(1L, "chat", "마스킹된 원문", "[]"));
         createdCaptures.add(capture.getId());
         Memory memory =
                 memoryRepository.save(

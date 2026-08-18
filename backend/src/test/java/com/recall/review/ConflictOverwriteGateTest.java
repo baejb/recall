@@ -52,7 +52,7 @@ class ConflictOverwriteGateTest {
     @Test
     @DisplayName("🔴 충돌(CONFLICT) 승인은 기존 기억을 덮어쓰지 않는다 — 두 기록 보존")
     void conflictApprovalDoesNotOverwriteExisting() {
-        Capture c = captureRepository.save(new Capture("chat", "마스킹된 원문", "[]"));
+        Capture c = captureRepository.save(new Capture(1L, "chat", "마스킹된 원문", "[]"));
         captureId = c.getId();
 
         // 기존 기억(포트=8080)

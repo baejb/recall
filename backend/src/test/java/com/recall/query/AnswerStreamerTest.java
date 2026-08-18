@@ -23,7 +23,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class AnswerStreamerTest {
 
     private Memory memory() {
-        return new Memory(null, MemoryType.KNOWLEDGE, "제목", "{}");
+        return Memory.transientCard(MemoryType.KNOWLEDGE, "제목", "{}");
     }
 
     @Test
@@ -33,9 +33,9 @@ class AnswerStreamerTest {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
         when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
-        when(pipeline.retrieve(eq("q"), any())).thenReturn(List.of());
+        when(pipeline.retrieve(eq("q"), any(), eq(1L))).thenReturn(List.of());
 
-        new AnswerStreamer(pipeline).emit(emitter, "q");
+        new AnswerStreamer(pipeline).emit(emitter, "q", 1L);
 
         verify(pipeline, never()).llmReady();
         verify(pipeline, never()).rerank(any(), anyList());
@@ -52,12 +52,12 @@ class AnswerStreamerTest {
         SseEmitter emitter = mock(SseEmitter.class);
         List<Memory> candidates = List.of(memory());
         when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
-        when(pipeline.retrieve(eq("q"), any())).thenReturn(candidates);
+        when(pipeline.retrieve(eq("q"), any(), eq(1L))).thenReturn(candidates);
         when(pipeline.llmReady()).thenReturn(false);
         when(pipeline.fallbackFragments(candidates))
                 .thenReturn(List.of(new AnswerFragment("요약", 1L)));
 
-        new AnswerStreamer(pipeline).emit(emitter, "q");
+        new AnswerStreamer(pipeline).emit(emitter, "q", 1L);
 
         verify(pipeline, never()).rerank(any(), anyList()); // 미가용 → RR 미실행
         verify(pipeline, never()).composeStreaming(any(), anyList(), any());
@@ -72,7 +72,7 @@ class AnswerStreamerTest {
         SseEmitter emitter = mock(SseEmitter.class);
         List<Memory> candidates = List.of(memory());
         when(pipeline.classify("q")).thenReturn(MemoryType.KNOWLEDGE);
-        when(pipeline.retrieve(eq("q"), any())).thenReturn(candidates);
+        when(pipeline.retrieve(eq("q"), any(), eq(1L))).thenReturn(candidates);
         when(pipeline.llmReady()).thenReturn(true);
         when(pipeline.rerank(eq("q"), anyList())).thenReturn(candidates); // RR → 재정렬된 근거
         doAnswer(
@@ -84,7 +84,7 @@ class AnswerStreamerTest {
                 .when(pipeline)
                 .composeStreaming(eq("q"), anyList(), any());
 
-        new AnswerStreamer(pipeline).emit(emitter, "q");
+        new AnswerStreamer(pipeline).emit(emitter, "q", 1L);
 
         verify(pipeline).rerank(eq("q"), anyList());
         verify(pipeline).composeStreaming(eq("q"), anyList(), any());

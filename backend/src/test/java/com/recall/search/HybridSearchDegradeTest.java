@@ -2,6 +2,7 @@ package com.recall.search;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -42,26 +43,26 @@ class HybridSearchDegradeTest {
     @DisplayName("REINDEXING 중엔 벡터 채널을 건너뛰고 BM25만 조회한다")
     void skipsVectorChannelWhileReindexing() {
         when(settings.embeddingStatus()).thenReturn("REINDEXING");
-        when(store.searchByKeyword(any(), any(), anyInt())).thenReturn(List.of());
+        when(store.searchByKeyword(anyLong(), any(), any(), anyInt())).thenReturn(List.of());
 
-        newService().search("q", MemoryType.KNOWLEDGE);
+        newService().search(1L, "q", MemoryType.KNOWLEDGE);
 
-        verify(store, never()).searchByVector(any(), any(), anyInt());
+        verify(store, never()).searchByVector(anyLong(), any(), any(), anyInt());
         verify(embeddingClient, never()).embedQuery(any());
-        verify(store).searchByKeyword(eq("q"), eq(MemoryType.KNOWLEDGE), anyInt());
+        verify(store).searchByKeyword(eq(1L), eq("q"), eq(MemoryType.KNOWLEDGE), anyInt());
     }
 
     @Test
     @DisplayName("FAILED 중엔 신구 모델 벡터 혼재라 벡터 채널을 건너뛰고 BM25만 조회한다")
     void skipsVectorChannelWhileFailed() {
         when(settings.embeddingStatus()).thenReturn("FAILED");
-        when(store.searchByKeyword(any(), any(), anyInt())).thenReturn(List.of());
+        when(store.searchByKeyword(anyLong(), any(), any(), anyInt())).thenReturn(List.of());
 
-        newService().search("q", MemoryType.KNOWLEDGE);
+        newService().search(1L, "q", MemoryType.KNOWLEDGE);
 
-        verify(store, never()).searchByVector(any(), any(), anyInt());
+        verify(store, never()).searchByVector(anyLong(), any(), any(), anyInt());
         verify(embeddingClient, never()).embedQuery(any());
-        verify(store).searchByKeyword(eq("q"), eq(MemoryType.KNOWLEDGE), anyInt());
+        verify(store).searchByKeyword(eq(1L), eq("q"), eq(MemoryType.KNOWLEDGE), anyInt());
     }
 
     @Test
@@ -69,11 +70,11 @@ class HybridSearchDegradeTest {
     void queriesVectorChannelWhenReady() {
         when(settings.embeddingStatus()).thenReturn("READY");
         when(embeddingClient.embedQuery(any())).thenReturn(new float[1024]);
-        when(store.searchByVector(any(), any(), anyInt())).thenReturn(List.of());
-        when(store.searchByKeyword(any(), any(), anyInt())).thenReturn(List.of());
+        when(store.searchByVector(anyLong(), any(), any(), anyInt())).thenReturn(List.of());
+        when(store.searchByKeyword(anyLong(), any(), any(), anyInt())).thenReturn(List.of());
 
-        newService().search("q", MemoryType.KNOWLEDGE);
+        newService().search(1L, "q", MemoryType.KNOWLEDGE);
 
-        verify(store).searchByVector(any(), eq(MemoryType.KNOWLEDGE), anyInt());
+        verify(store).searchByVector(eq(1L), any(), eq(MemoryType.KNOWLEDGE), anyInt());
     }
 }

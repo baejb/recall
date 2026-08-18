@@ -3,6 +3,7 @@ package com.recall.capture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -57,7 +58,7 @@ class CaptureFailureExposureTest {
     @BeforeEach
     void arrange() {
         when(llmClient.complete(any(), any())).thenReturn(null);
-        when(similarMemoryFinder.findSimilar(any(), any()))
+        when(similarMemoryFinder.findSimilar(anyLong(), any(), any()))
                 .thenThrow(new RuntimeException("판정 단계 강제 실패(테스트)"));
     }
 
