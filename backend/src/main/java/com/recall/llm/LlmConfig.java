@@ -34,12 +34,26 @@ public class LlmConfig {
         return new LlmClientFactory(providers);
     }
 
+    /**
+     * @deprecated 레거시 기본 빈. 멀티유저 전환 후 파이프라인은 사용자별 LLM 을 {@link
+     *     com.recall.llm.AiContextFactory#forUser(long)}로 얻는다 — 이 프록시를 직접 주입하지 말 것. 이 프록시는 {@code
+     *     SettingsService.currentChat()}(→ {@code CurrentUserProvider})로 현재 사용자를 해석하는데, @Async 저장
+     *     잡·SSE 가상 스레드에는 요청 스레드의 소유자가 전파되지 않아 잘못된/부재 사용자로 해석된다(교차유출은 아니고 fail-safe). 현재는 아무 실사용
+     *     호출부가 없고 {@code SettingsController}의 설정 표시(현재 사용자)만 {@code currentChat/currentEmbedding}을
+     *     쓴다. OAuth 배선 후속에서 이 빈과 {@code SettingsBacked*} 프록시를 제거한다.
+     */
+    @Deprecated
     @Bean
     @ConditionalOnMissingBean(LlmClient.class)
     LlmClient llmClient(SettingsService settings, LlmClientFactory factory) {
         return new SettingsBackedLlmClient(settings, factory);
     }
 
+    /**
+     * @deprecated {@link #llmClient} 과 동일 — 파이프라인은 {@code AiContextFactory.forUser}의 임베딩을 쓴다. OAuth
+     *     후속에서 제거.
+     */
+    @Deprecated
     @Bean
     @ConditionalOnMissingBean(EmbeddingClient.class)
     EmbeddingClient embeddingClient(SettingsService settings, EmbeddingClientFactory factory) {
