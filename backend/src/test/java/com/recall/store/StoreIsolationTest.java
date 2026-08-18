@@ -6,6 +6,7 @@ import com.recall.capture.Capture;
 import com.recall.capture.CaptureRepository;
 import com.recall.common.MemoryType;
 import com.recall.llm.AiContextFactory;
+import com.recall.llm.StubEmbeddingClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.MemoryRepository;
@@ -92,13 +93,18 @@ class StoreIsolationTest {
     @DisplayName("🔴 S4 유사판정: 소유자(A)에겐 남(B)의 기억이 후보로 안 잡힌다")
     void similarFinderScopedToOwner() {
         Map<String, Object> structured = Map.of("title", KEYWORD);
+        // embedding 만 필요(chat 은 이 경로에서 쓰이지 않음) — StubEmbeddingClient 로 기존 동작(0벡터→BM25 폴백)과 동일하게 유지.
+        UserAiContext embeddingCtx =
+                new UserAiContext(0L, null, new StubEmbeddingClient(), true, true);
         Optional<Memory> forA =
-                similarMemoryFinder.findSimilar(userA, structured, MemoryType.KNOWLEDGE);
+                similarMemoryFinder.findSimilar(
+                        userA, structured, MemoryType.KNOWLEDGE, embeddingCtx);
         assertTrue(forA.isEmpty(), "A 는 B 의 기억을 유사 후보로 끌어오면 안 된다(교차유출)");
 
         // 거짓 통과 방지: B 로 부르면 자기 기억이 잡힌다(색인이 실제로 됐음).
         Optional<Memory> forB =
-                similarMemoryFinder.findSimilar(userB, structured, MemoryType.KNOWLEDGE);
+                similarMemoryFinder.findSimilar(
+                        userB, structured, MemoryType.KNOWLEDGE, embeddingCtx);
         assertTrue(forB.isPresent(), "B 는 자기 색인 기억을 후보로 찾는다");
     }
 

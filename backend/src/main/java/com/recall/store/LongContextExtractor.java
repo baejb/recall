@@ -7,6 +7,7 @@ import com.recall.common.MemoryType;
 import com.recall.common.PromptLoader;
 import com.recall.common.StrategyRegistry;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.type.ExtractionStrategy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,25 +42,22 @@ public class LongContextExtractor {
     private static final String MERGE_PROMPT_PATH = "prompts/longcontext-merge.md";
 
     private final StrategyRegistry<ExtractionStrategy> extractions;
-    private final LlmClient llmClient;
     private final String mergeSystemPrompt;
     private final ObjectMapper objectMapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     public LongContextExtractor(
-            List<ExtractionStrategy> extractionStrategies,
-            LlmClient llmClient,
-            PromptLoader promptLoader) {
+            List<ExtractionStrategy> extractionStrategies, PromptLoader promptLoader) {
         this.extractions = new StrategyRegistry<>(extractionStrategies);
-        this.llmClient = llmClient;
         this.mergeSystemPrompt = promptLoader.load(MERGE_PROMPT_PATH);
     }
 
     /**
      * 유형별 구조화 추출(S2/S3). 짧으면 단일 패스, 길면 청킹 후 Map-Reduce. 반환은 S2와 동일한 {@code Map<String,Object>} 카드라
-     * 이후 판정(S4)·검토 흐름은 그대로다.
+     * 이후 판정(S4)·검토 흐름은 그대로다. Reduce(병합) LLM 호출은 {@code ctx.requireChat()}으로 얻는다 — 주입된 전역 싱글턴이 아니라
+     * capture 소유자에 바인딩된 클라이언트만 쓴다(사용자별 provider/키 교차유출 방지).
      */
-    public Map<String, Object> extract(MemoryType type, String maskedText) {
+    public Map<String, Object> extract(MemoryType type, String maskedText, UserAiContext ctx) {
         ExtractionStrategy strategy = extractions.get(type);
         if (maskedText == null || maskedText.length() <= SINGLE_PASS_MAX_CHARS) {
             return strategy.extract(maskedText); // 단일 패스(S2)
@@ -68,14 +66,15 @@ public class LongContextExtractor {
         log.info("S3 긴맥락 추출: {}자 → {}조각 Map-Reduce", maskedText.length(), chunks.size());
         List<Map<String, Object>> partials =
                 chunks.stream().map(strategy::extract).toList(); // Map — 조각마다 S2
-        return reduce(partials); // Reduce
+        return reduce(partials, ctx); // Reduce
     }
 
     /** 부분 카드들을 하나로 병합(Reduce). LLM 병합을 우선하고, 미가용/실패/파싱불가면 결정론 병합으로 격하한다. */
-    private Map<String, Object> reduce(List<Map<String, Object>> partials) {
+    private Map<String, Object> reduce(List<Map<String, Object>> partials, UserAiContext ctx) {
         if (partials.size() == 1) {
             return partials.get(0);
         }
+        LlmClient llmClient = ctx.requireChat();
         if (!llmClient.available()) {
             return mergeDeterministic(partials); // stub → 결정론 병합
         }

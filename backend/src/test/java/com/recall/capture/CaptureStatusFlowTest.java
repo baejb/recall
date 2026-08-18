@@ -4,14 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.StubEmbeddingClient;
+import com.recall.llm.UserAiContext;
 import com.recall.review.ReviewItem;
 import com.recall.review.ReviewRepository;
 import java.util.ArrayList;
@@ -48,6 +51,12 @@ class CaptureStatusFlowTest {
     /** 유사후보 탐색의 임베딩도 stub(0벡터)로 — 무네트워크. */
     @MockitoBean private EmbeddingClient embeddingClient;
 
+    /**
+     * capture 소유자(bootstrap)의 AI 컨텍스트를 항상 ready로 고정한다 — context 게이트(신규 첫 단계)를 통과시켜 이 테스트가 검증하려는 성공
+     * 경로(DONE)에 도달하게 한다. chat/embedding 클라이언트는 위에서 이미 mock 한 전역 빈을 그대로 바인딩해 무네트워크 결정성을 유지한다.
+     */
+    @MockitoBean private AiContextFactory contextFactory;
+
     private final List<Long> createdCaptures = new ArrayList<>();
 
     @BeforeEach
@@ -57,6 +66,15 @@ class CaptureStatusFlowTest {
         when(embeddingClient.dimension()).thenReturn(stub.dimension());
         when(embeddingClient.embedDocument(any())).thenReturn(stub.embedDocument(""));
         when(embeddingClient.embedQuery(any())).thenReturn(stub.embedQuery(""));
+        when(contextFactory.forUser(anyLong()))
+                .thenAnswer(
+                        inv ->
+                                new UserAiContext(
+                                        (long) inv.getArgument(0),
+                                        llmClient,
+                                        embeddingClient,
+                                        true,
+                                        true));
     }
 
     @AfterEach

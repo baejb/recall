@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.capture.Capture;
 import com.recall.capture.CaptureCreatedEvent;
 import com.recall.capture.CaptureRepository;
+import com.recall.common.AiNotConfiguredException;
 import com.recall.common.MemoryType;
 import com.recall.common.StrategyRegistry;
+import com.recall.llm.AiContextFactory;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.type.Judgement;
 import com.recall.memory.type.SimilarityJudgeStrategy;
@@ -38,6 +41,7 @@ public class StorePipeline {
     private final ReviewRepository reviewRepository;
     private final SimilarMemoryFinder similarMemoryFinder;
     private final LongContextExtractor longContextExtractor;
+    private final AiContextFactory contextFactory;
     private final StrategyRegistry<SimilarityJudgeStrategy> judges;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -46,11 +50,13 @@ public class StorePipeline {
             ReviewRepository reviewRepository,
             SimilarMemoryFinder similarMemoryFinder,
             LongContextExtractor longContextExtractor,
+            AiContextFactory contextFactory,
             List<SimilarityJudgeStrategy> judgeStrategies) {
         this.captureRepository = captureRepository;
         this.reviewRepository = reviewRepository;
         this.similarMemoryFinder = similarMemoryFinder;
         this.longContextExtractor = longContextExtractor;
+        this.contextFactory = contextFactory;
         this.judges = new StrategyRegistry<>(judgeStrategies);
     }
 
@@ -63,7 +69,8 @@ public class StorePipeline {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onCaptureCreated(CaptureCreatedEvent event) {
         // 진행 단계를 추적해 실패 시 어느 단계에서 죽었는지 상태로 드러낸다(조용한 실패 금지).
-        String stage = "classify";
+        // 단계 순서: context → classify → extract → judge → review.
+        String stage = "context";
         try {
             Capture capture =
                     captureRepository
@@ -73,16 +80,28 @@ public class StorePipeline {
                                             new IllegalStateException(
                                                     "capture 없음: " + event.captureId()));
 
+            // 소유자(capture.user_id, DB 기준)로 AI 컨텍스트를 해석한다 — 비동기 스레드엔 요청 스레드의
+            // CurrentUserProvider/thread-local 이 없으므로 절대 그걸 신뢰하지 않는다(다른 사용자의 요청이 동시에
+            // 떠 있어도 소유자 정확성이 지켜진다). 저장 경로는 추출(chat)과 색인/판정(embedding) 둘 다 필요하다 —
+            // 둘 중 하나라도 미설정이면 여기서 막아 이후 단계로 새지 않게 한다.
+            UserAiContext ctx = contextFactory.forUser(capture.getUserId());
+            if (!ctx.chatReady() || !ctx.embeddingReady()) {
+                throw new AiNotConfiguredException("소유자 AI 미설정(user=" + capture.getUserId() + ")");
+            }
+
+            stage = "classify";
             MemoryType type = classify(event.maskedText());
 
             stage = "extract";
-            // S2/S3 — 짧으면 단일 패스, 길면 긴맥락 Map-Reduce(청킹→조각추출→병합).
-            Map<String, Object> structured = longContextExtractor.extract(type, event.maskedText());
+            // S2/S3 — 짧으면 단일 패스, 길면 긴맥락 Map-Reduce(청킹→조각추출→병합). LLM 은 ctx 에 바인딩된
+            // 것만 쓴다(전역 싱글턴 아님) — 사용자별 provider/키 교차유출 방지.
+            Map<String, Object> structured =
+                    longContextExtractor.extract(type, event.maskedText(), ctx);
 
             stage = "judge";
             // S4 — 유사 기존 기억을 찾아 대조 판정. 같은 사용자(capture 소유자)의 기억끼리만 대조한다.
             Optional<Memory> similar =
-                    similarMemoryFinder.findSimilar(capture.getUserId(), structured, type);
+                    similarMemoryFinder.findSimilar(capture.getUserId(), structured, type, ctx);
             Map<String, Object> existing =
                     similar.map(m -> parse(m.getStructured())).orElseGet(Map::of);
             Judgement judgement = judges.get(type).judge(structured, existing);
@@ -108,6 +127,11 @@ public class StorePipeline {
                     type,
                     judgement.verdict(),
                     target == null ? null : target.getId());
+        } catch (AiNotConfiguredException e) {
+            // 소유자 AI 미설정은 classify/extract/judge 어떤 단계에도 귀속시키지 않는다 — 항상 context 로
+            // 드러낸다(원인 혼동 방지). markFailed 는 자기 소유의 REQUIRES_NEW 트랜잭션으로 독립 커밋한다.
+            log.error("캡처 처리 실패 stage=context capture={}", event.captureId(), e);
+            captureRepository.markFailed(event.captureId(), "context");
         } catch (Exception e) {
             // 조용한 실패 금지: 실패 단계를 로그로 드러내고 FAILED 를 durable 하게 남긴다.
             log.error("캡처 처리 실패 stage={} capture={}", stage, event.captureId(), e);
