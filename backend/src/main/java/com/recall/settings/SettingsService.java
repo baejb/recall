@@ -1,6 +1,8 @@
 package com.recall.settings;
 
 import com.recall.common.BadRequestException;
+import com.recall.common.BootstrapCurrentUserProvider;
+import com.recall.common.CurrentUserProvider;
 import com.recall.common.SecretCipher;
 import com.recall.common.SecretMasking;
 import com.recall.llm.EmbeddingClientFactory;
@@ -14,7 +16,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
 
-/** 전역 모델 설정의 조회·변경. 키는 복호화해 클라이언트에 넘기고, 저장 시 암호화한다(없으면 env 폴백). */
+/**
+ * 모델 설정의 사용자별 조회·변경. 키는 복호화해 클라이언트에 넘기고, 저장 시 암호화한다.
+ *
+ * <p>env 키 폴백은 **부트스트랩 사용자({@link BootstrapCurrentUserProvider#BOOTSTRAP_USER_ID})에게만** 적용된다 — 다른
+ * 사용자는 DB 에 자신의 암호화된 키가 없으면 미설정으로 취급한다(스펙 §7, env 키가 전 사용자에게 새면 🔴 치명).
+ *
+ * <p>파라미터 없는 진입점(예: {@link #currentChat()}, {@link #update(SettingsUpdate)})은 {@link
+ * CurrentUserProvider}로 현재 요청 사용자를 해석해 사용자별 로직에 위임한다 — {@code SettingsBackedLlmClient}/{@code
+ * EmbeddingClient}, {@code ReindexService}가 아직 이 진입점을 호출하므로 제거하지 않는다(후속 태스크에서 사용자별 호출로 이전).
+ */
 @Service
 public class SettingsService {
 
@@ -25,6 +36,7 @@ public class SettingsService {
     private final EmbeddingClientFactory embeddingFactory;
     private final ProviderCatalog catalog;
     private final ApplicationEventPublisher publisher;
+    private final CurrentUserProvider currentUser;
 
     public SettingsService(
             ModelSettingRepository repository,
@@ -33,7 +45,8 @@ public class SettingsService {
             LlmProperties envChat,
             EmbeddingClientFactory embeddingFactory,
             ProviderCatalog catalog,
-            ApplicationEventPublisher publisher) {
+            ApplicationEventPublisher publisher,
+            CurrentUserProvider currentUser) {
         this.repository = repository;
         this.cipher = cipher;
         this.envEmbedding = envEmbedding;
@@ -41,27 +54,30 @@ public class SettingsService {
         this.embeddingFactory = embeddingFactory;
         this.catalog = catalog;
         this.publisher = publisher;
+        this.currentUser = currentUser;
     }
 
-    // TODO(멀티유저 후속 — 별도 PR): model_setting 은 아직 전역 단일 행(id=1)이라 BYO 키/모델 설정이
-    //   전 사용자 공유다. 사용자별 키로 가려면 (1) V12 로 model_setting 에 user_id, (2) 이 조회를 현재
-    //   사용자 행으로, (3) SettingsBackedLlm/EmbeddingClient 가 "설정 사용자"를 동기(요청 경계)·비동기
-    //   (capture 소유자)·재색인(사용자별) 진입점마다 세팅한 컨텍스트로 해석하게, (4) 재색인 사용자별.
-    //   범위가 async LLM/임베딩 경로까지 퍼지는 서브시스템이라 격리 PR과 분리한다.
-    private ModelSetting row() {
+    private ModelSetting row(long userId) {
         return repository
-                .findById(1L)
-                .orElseThrow(() -> new IllegalStateException("model_setting 미초기화"));
+                .findByUserId(userId)
+                .orElseThrow(
+                        () -> new IllegalStateException("model_setting 미초기화(user=" + userId + ")"));
     }
 
     @Transactional(readOnly = true)
     public EmbeddingProperties currentEmbedding() {
-        return embeddingPropsFrom(row());
+        return embeddingFor(currentUser.currentUserId());
     }
 
-    /** 행(row)의 현재 값으로 {@link EmbeddingProperties}를 구성한다(키는 복호화, 없으면 env 폴백). */
-    private EmbeddingProperties embeddingPropsFrom(ModelSetting s) {
-        String key = decryptOr(s.getEmbeddingApiKeyEnc(), envEmbedding.apiKey());
+    /** {@code userId} 소유 설정으로 {@link EmbeddingProperties}를 해석한다(키는 복호화, env 폴백은 부트스트랩만). */
+    @Transactional(readOnly = true)
+    public EmbeddingProperties embeddingFor(long userId) {
+        return embeddingPropsFrom(userId, row(userId));
+    }
+
+    /** 행(row)의 현재 값으로 {@link EmbeddingProperties}를 구성한다(키는 복호화, 없으면 env 폴백 — 부트스트랩만). */
+    private EmbeddingProperties embeddingPropsFrom(long userId, ModelSetting s) {
+        String key = resolveEmbeddingKey(userId, s.getEmbeddingApiKeyEnc());
         String baseUrl = baseUrlOr(s.getEmbeddingBaseUrl(), envEmbedding.baseUrl());
         return new EmbeddingProperties(
                 s.getEmbeddingProvider(), key, s.getEmbeddingModel(), baseUrl, 1024);
@@ -69,26 +85,76 @@ public class SettingsService {
 
     @Transactional(readOnly = true)
     public LlmProperties currentChat() {
-        ModelSetting s = row();
-        String key = decryptOr(s.getChatApiKeyEnc(), envChat.apiKey());
+        return chatFor(currentUser.currentUserId());
+    }
+
+    /** {@code userId} 소유 설정으로 {@link LlmProperties}를 해석한다(키는 복호화, env 폴백은 부트스트랩만). */
+    @Transactional(readOnly = true)
+    public LlmProperties chatFor(long userId) {
+        ModelSetting s = row(userId);
+        String key = resolveChatKey(userId, s.getChatApiKeyEnc());
         String baseUrl = baseUrlOr(s.getChatBaseUrl(), envChat.baseUrl());
         return new LlmProperties(
                 s.getChatProvider(), key, s.getChatModel(), baseUrl, envChat.maxTokens());
     }
 
+    /**
+     * {@code userId}의 chat 이 사용 가능한 키를 갖는지(DB 키, 또는 부트스트랩이면 env 폴백). {@code userId} 소유의
+     * model_setting 행이 아직 없으면(예: 막 가입해 설정을 한 번도 만진 적 없는 사용자) 암호문 없음과 동일하게 취급한다 — 그래도 env 폴백은 부트스트랩
+     * 전용 규칙을 그대로 통과해야 한다(행 유무로 이 경계를 우회할 수 없다).
+     */
+    @Transactional(readOnly = true)
+    public boolean isChatConfigured(long userId) {
+        String enc =
+                repository.findByUserId(userId).map(ModelSetting::getChatApiKeyEnc).orElse(null);
+        return notBlank(resolveChatKey(userId, enc));
+    }
+
+    /**
+     * {@code userId}의 embedding 이 사용 가능한 키를 갖는지 — {@link #isChatConfigured(long)}과 동일한 미존재 행 계약.
+     */
+    @Transactional(readOnly = true)
+    public boolean isEmbeddingConfigured(long userId) {
+        String enc =
+                repository
+                        .findByUserId(userId)
+                        .map(ModelSetting::getEmbeddingApiKeyEnc)
+                        .orElse(null);
+        return notBlank(resolveEmbeddingKey(userId, enc));
+    }
+
+    /**
+     * chat API 키를 해석한다 — DB 암호문({@code enc})이 있으면 복호화해 반환하고, 없으면 {@code userId}가 부트스트랩 사용자일 때만 env
+     * 키로 폴백한다. 그 외 사용자는 암호문이 없으면 {@code null}(미설정)이다 — env 키가 전 사용자에게 새지 않도록 하는 경계(스펙 §7).
+     * model_setting 행 자체가 없는 사용자도 {@code enc=null}로 이 규칙을 그대로 탄다.
+     */
+    private String resolveChatKey(long userId, String enc) {
+        if (notBlank(enc)) return cipher.decrypt(enc);
+        return userId == BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID ? envChat.apiKey() : null;
+    }
+
+    /** embedding API 키 해석 — {@link #resolveChatKey(long, String)}과 동일한 부트스트랩 전용 env 폴백 규칙. */
+    private String resolveEmbeddingKey(long userId, String enc) {
+        if (notBlank(enc)) return cipher.decrypt(enc);
+        return userId == BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID
+                ? envEmbedding.apiKey()
+                : null;
+    }
+
     @Transactional(readOnly = true)
     public String embeddingStatus() {
-        return row().getEmbeddingStatus();
+        return row(currentUser.currentUserId()).getEmbeddingStatus();
     }
 
     @Transactional
     public void setEmbeddingStatus(String status) {
-        row().setEmbeddingStatus(status);
+        row(currentUser.currentUserId()).setEmbeddingStatus(status);
     }
 
     @Transactional
     public UpdateResult update(SettingsUpdate u) {
-        ModelSetting s = row();
+        long userId = currentUser.currentUserId();
+        ModelSetting s = row(userId);
         boolean reindexNeeded = false;
 
         // base-url 오버라이드는 https 스킴만 허용(SSRF 여지 축소). null=변경 없음, ""=해제는 통과.
@@ -143,7 +209,7 @@ public class SettingsService {
         // 덮어써 검색이 조용히 망가진다. 재색인 전에 유효 임베딩 키를 강제해 그 경로를 막는다.
         // (probe/REINDEXING/publish 이전이므로 @Transactional 이 롤백되어 아무 것도 파괴되지 않는다.)
         if (reindexNeeded) {
-            String effectiveKey = decryptOr(s.getEmbeddingApiKeyEnc(), envEmbedding.apiKey());
+            String effectiveKey = resolveEmbeddingKey(userId, s.getEmbeddingApiKeyEnc());
             if (!notBlank(effectiveKey)) {
                 throw new BadRequestException("임베딩 provider/모델 변경에는 유효한 API 키가 필요합니다 (기존 벡터 보호)");
             }
@@ -154,7 +220,7 @@ public class SettingsService {
         // 호출 시점에 실패하지 않도록 새 키로 프로브는 반드시 돌려야 한다(기존 벡터는 유효하게 남음).
         boolean validationNeeded = reindexNeeded || embeddingKeyRotated;
         if (validationNeeded) {
-            probeEmbedding(embeddingPropsFrom(s));
+            probeEmbedding(embeddingPropsFrom(userId, s));
         }
 
         if (reindexNeeded) {
@@ -163,7 +229,7 @@ public class SettingsService {
             // 배경에서 수행하며, 이 세대 토큰을 들고 돌아 뒤늦은 앞선 잡의 상태 덮어쓰기를 막는다(순환 회피).
             long gen = s.getEmbeddingGeneration() + 1;
             s.setEmbeddingGeneration(gen);
-            setEmbeddingStatus("REINDEXING");
+            s.setEmbeddingStatus("REINDEXING");
             publisher.publishEvent(new EmbeddingModelChangedEvent(gen));
         }
 
@@ -198,11 +264,6 @@ public class SettingsService {
                     "RECALL_SECRET_KEY 미설정 — UI 입력 키를 저장할 수 없다(fail-closed)");
         }
         return cipher.encrypt(plaintext);
-    }
-
-    private String decryptOr(String enc, String envFallback) {
-        if (enc == null || enc.isBlank()) return envFallback;
-        return cipher.decrypt(enc);
     }
 
     private static boolean notBlank(String v) {
