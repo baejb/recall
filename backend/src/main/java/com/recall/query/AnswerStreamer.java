@@ -1,6 +1,7 @@
 package com.recall.query;
 
 import com.recall.common.MemoryType;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.query.dto.AnswerFragment;
 import java.io.IOException;
@@ -17,7 +18,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * 답변을 서버-전송 이벤트(SSE)로 흘려보내는 전송 담당. 컨트롤러의 HTTP 변환과 파이프라인의 조회 로직 사이에서 스트리밍만 맡는다.
  *
  * <p>흐름: 검색(R·W)으로 근거를 찾고 → 근거가 없으면 "기록 없음"(근거 없는 생성 금지) → 있으면 LLM이 근거만으로 답을 합성해 토큰을 흘리고(A) 근거
- * citation을 뒤에 붙인다. LLM 미가용/합성 실패(토큰 전송 전)면 각 근거의 요약으로 격하한다(조용한 실패 금지).
+ * citation을 뒤에 붙인다. 합성 실패(토큰 전송 전)면 각 근거의 요약으로 격하한다(조용한 실패 금지).
+ *
+ * <p>사용자별 AI 컨텍스트({@link UserAiContext})는 요청 스레드(컨트롤러)에서 이미 만들어져 넘어온다 — chat 미설정(차단, 409)은 {@code
+ * QueryController}가 스트림을 시작하기 전에 걸러내므로, 여기 도달했다면 chat은 설정된 상태다. 설정 완료 후의 외부 LLM 호출 실패는 이 클래스가 잡아 기존
+ * 격하(요약)로 응답한다 — 미설정(차단)과 외부 장애(격하)를 섞지 않는다.
  */
 @Component
 public class AnswerStreamer {
@@ -37,18 +42,19 @@ public class AnswerStreamer {
     }
 
     /** 질문에 대한 답변을 SSE로 스트리밍하는 emitter를 만든다(가상 스레드에서 블로킹 LLM 스트림을 소비). */
-    public SseEmitter stream(String question, long userId) {
+    public SseEmitter stream(String question, UserAiContext ctx) {
         SseEmitter emitter = new SseEmitter(TIMEOUT_MS);
-        // 소유자(userId)는 요청 스레드에서 이미 해석해 넘겨받는다 — SSE 가상 스레드에는
-        // SecurityContext(thread-local)가 전파되지 않으므로 여기서 다시 풀지 않는다(교차유출 방지).
-        Thread.ofVirtual().name("sse-answer-").start(() -> emit(emitter, question, userId));
+        // ctx(소유자·chat/embedding 클라이언트)는 요청 스레드에서 이미 해석해 넘겨받는다 — SSE 가상 스레드에는
+        // SecurityContext(thread-local)가 전파되지 않으므로 여기서 다시 풀지 않는다(교차유출 방지). 클로저로
+        // 캡처해 요청 사용자가 바뀌어도 이 스트림은 캡처 시점의 컨텍스트로만 동작한다.
+        Thread.ofVirtual().name("sse-answer-").start(() -> emit(emitter, question, ctx));
         return emitter;
     }
 
-    void emit(SseEmitter emitter, String question, long userId) {
+    void emit(SseEmitter emitter, String question, UserAiContext ctx) {
         try {
-            MemoryType type = pipeline.classify(question); // C — 질문 유형(지식/트슈)
-            List<Memory> candidates = pipeline.retrieve(question, type, userId); // R·W
+            MemoryType type = pipeline.classify(question, ctx); // C — 질문 유형(지식/트슈)
+            List<Memory> candidates = pipeline.retrieve(question, type, ctx); // R·W(ctx.userId 스코프)
             if (candidates.isEmpty()) {
                 // 근거 없음 → 지어내지 않고 "기록 없음"(LLM 미호출).
                 emitter.send(
@@ -57,9 +63,9 @@ public class AnswerStreamer {
                 return;
             }
 
-            boolean llm = pipeline.llmReady();
-            // RR: LLM 경로에서만 재정렬(실패/미가용 시 W 순서 유지). 이후 답변·citation은 이 evidence 순서를 따른다.
-            List<Memory> evidence = llm ? pipeline.rerank(question, candidates) : candidates;
+            // RR: 후보 1개 이하면 파이프라인 내부에서 chat 호출 없이 그대로, 그 외엔 재정렬(호출 실패 시 W 순서
+            // 유지 — 격하). chat 미설정 차단은 이미 조회 입구(QueryController)를 통과했으므로 여기선 발생하지 않는다.
+            List<Memory> evidence = pipeline.rerank(question, candidates, ctx);
 
             boolean[] sentText = {false};
             StringBuilder answer = new StringBuilder();
@@ -74,16 +80,15 @@ public class AnswerStreamer {
                     };
 
             boolean composed = false;
-            if (llm) {
-                try {
-                    pipeline.composeStreaming(question, evidence, textSink);
-                    composed = true;
-                } catch (UncheckedIOException clientGone) {
-                    throw clientGone; // 클라이언트 끊김 → 바깥에서 completeWithError
-                } catch (RuntimeException llmFailure) {
-                    // 합성 실패: 토큰을 이미 보냈으면 부분 답 유지, 아니면 아래에서 격하.
-                    log.warn("A(답변합성) 실패: {}", llmFailure.getMessage(), llmFailure);
-                }
+            try {
+                pipeline.composeStreaming(question, evidence, textSink, ctx);
+                composed = true;
+            } catch (UncheckedIOException clientGone) {
+                throw clientGone; // 클라이언트 끊김 → 바깥에서 completeWithError
+            } catch (RuntimeException llmFailure) {
+                // 설정은 됐으나(chatReady) 외부 호출이 실패 — 미설정 차단과는 다른 상황(격하): 토큰을 이미
+                // 보냈으면 부분 답 유지, 아니면 아래에서 요약 격하.
+                log.warn("A(답변합성) 실패: {}", llmFailure.getMessage(), llmFailure);
             }
 
             if (composed || sentText[0]) {

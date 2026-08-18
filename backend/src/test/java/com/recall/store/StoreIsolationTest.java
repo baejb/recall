@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.recall.capture.Capture;
 import com.recall.capture.CaptureRepository;
 import com.recall.common.MemoryType;
+import com.recall.llm.AiContextFactory;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
@@ -37,6 +39,7 @@ class StoreIsolationTest {
 
     @Autowired private SimilarMemoryFinder similarMemoryFinder;
     @Autowired private QueryPipeline queryPipeline;
+    @Autowired private AiContextFactory contextFactory;
     @Autowired private CaptureRepository captureRepository;
     @Autowired private MemoryRepository memoryRepository;
     @Autowired private MemorySearchStore searchStore;
@@ -102,10 +105,15 @@ class StoreIsolationTest {
     @Test
     @DisplayName("🔴 조회 검색(R): 소유자(A)에겐 남(B)의 기억이 근거로 안 잡힌다")
     void retrieveScopedToOwner() {
-        List<Memory> forA = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, userA);
+        // retrieve는 chat이 아니라 embedding capability만 쓰므로, chat 미설정인 ctx(둘 다 model_setting
+        // 행 없음)라도 그대로 통과한다 — 차단은 조회 입구(QueryController)의 몫이지 R 단계의 몫이 아니다.
+        UserAiContext ctxA = contextFactory.forUser(userA);
+        UserAiContext ctxB = contextFactory.forUser(userB);
+
+        List<Memory> forA = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxA);
         assertTrue(forA.isEmpty(), "A 검색은 B 의 기억을 근거로 반환하면 안 된다(교차유출)");
 
-        List<Memory> forB = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, userB);
+        List<Memory> forB = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxB);
         assertTrue(!forB.isEmpty(), "B 검색은 자기 기억을 근거로 반환한다");
     }
 }

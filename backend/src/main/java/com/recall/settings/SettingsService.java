@@ -143,7 +143,16 @@ public class SettingsService {
 
     @Transactional(readOnly = true)
     public String embeddingStatus() {
-        return row(currentUser.currentUserId()).getEmbeddingStatus();
+        return embeddingStatus(currentUser.currentUserId());
+    }
+
+    /**
+     * {@code userId} 소유 model_setting 행의 embedding_status. {@link CurrentUserProvider}에 의존하지 않아야 하는
+     * 호출부(SSE 답변 가상 스레드처럼 요청 스레드가 이미 신뢰한 userId를 클로저로 캡처해 도는 경우)는 이 오버로드로 명시적 userId를 넘긴다.
+     */
+    @Transactional(readOnly = true)
+    public String embeddingStatus(long userId) {
+        return row(userId).getEmbeddingStatus();
     }
 
     @Transactional
