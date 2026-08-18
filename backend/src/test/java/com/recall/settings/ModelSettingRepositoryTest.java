@@ -67,7 +67,7 @@ class ModelSettingRepositoryTest {
 
         @Test
         void staleGenerationUpdatesNoRowsAndLeavesStatusUnchanged() {
-            int updated = repository.updateEmbeddingStatusIfGeneration("READY", 1L);
+            int updated = repository.updateEmbeddingStatusIfGeneration(1L, "READY", 1L);
 
             assertEquals(0, updated);
             assertEquals("REINDEXING", repository.findById(1L).orElseThrow().getEmbeddingStatus());
@@ -75,7 +75,7 @@ class ModelSettingRepositoryTest {
 
         @Test
         void currentGenerationUpdatesStatusButNeverTouchesGeneration() {
-            int updated = repository.updateEmbeddingStatusIfGeneration("READY", 2L);
+            int updated = repository.updateEmbeddingStatusIfGeneration(1L, "READY", 2L);
 
             assertEquals(1, updated);
             ModelSetting after = repository.findById(1L).orElseThrow();

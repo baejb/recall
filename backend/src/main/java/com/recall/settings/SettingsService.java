@@ -11,6 +11,7 @@ import com.recall.llm.LlmProperties;
 import com.recall.settings.ProviderCatalog.Role;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,10 @@ import org.springframework.web.client.RestClientResponseException;
  *
  * <p>파라미터 없는 진입점(예: {@link #currentChat()}, {@link #update(SettingsUpdate)})은 {@link
  * CurrentUserProvider}로 현재 요청 사용자를 해석해 사용자별 로직에 위임한다 — {@code SettingsBackedLlmClient}/{@code
- * EmbeddingClient}, {@code ReindexService}가 아직 이 진입점을 호출하므로 제거하지 않는다(후속 태스크에서 사용자별 호출로 이전).
+ * EmbeddingClient}가 아직 이 진입점을 호출하므로 제거하지 않는다(후속 태스크에서 사용자별 호출로 이전). {@code ReindexService}는 (Task
+ * 9) {@code AiContextFactory#forUser}로 전환해 더 이상 이 진입점을 쓰지 않는다 — 재색인 배경 스레드가 요청 스레드의 {@link
+ * CurrentUserProvider}에 의존하지 않도록(교차유출 방지) {@code EmbeddingModelChangedEvent}가 실어온 userId 로 컨텍스트를
+ * 고정한다.
  */
 @Service
 public class SettingsService {
@@ -211,7 +215,13 @@ public class SettingsService {
         }
         boolean embeddingKeyRotated = notBlank(u.embeddingApiKey());
         if (embeddingKeyRotated) s.setEmbeddingApiKeyEnc(encrypt(u.embeddingApiKey()));
-        if (u.embeddingBaseUrl() != null) s.setEmbeddingBaseUrl(blankToNull(u.embeddingBaseUrl()));
+        // base URL 이 바뀌면 실제로 다른 임베딩 엔드포인트를 때린다(자체호스트/프록시 전환 등) — 벡터
+        // 공간이 같은 provider+model 이라도 값이 달라질 수 있으므로 재색인 대상이다(API 키만 회전은 아님).
+        if (u.embeddingBaseUrl() != null) {
+            String newEmbeddingBaseUrl = blankToNull(u.embeddingBaseUrl());
+            reindexNeeded |= !Objects.equals(newEmbeddingBaseUrl, s.getEmbeddingBaseUrl());
+            s.setEmbeddingBaseUrl(newEmbeddingBaseUrl);
+        }
 
         // P1-b: 재색인은 기존 memory_embedding 을 전량 재작성한다. 유효 키가 없으면 팩토리가
         // StubEmbeddingClient 를 반환해 프로브가 무의미하게 통과하고, 재색인이 기존 벡터를 0-벡터로
@@ -239,7 +249,7 @@ public class SettingsService {
             long gen = s.getEmbeddingGeneration() + 1;
             s.setEmbeddingGeneration(gen);
             s.setEmbeddingStatus("REINDEXING");
-            publisher.publishEvent(new EmbeddingModelChangedEvent(gen));
+            publisher.publishEvent(new EmbeddingModelChangedEvent(userId, gen));
         }
 
         return new UpdateResult(reindexNeeded);

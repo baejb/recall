@@ -525,6 +525,7 @@ class SettingsServiceProbeTest {
                 ArgumentCaptor.forClass(EmbeddingModelChangedEvent.class);
         verify(publisher).publishEvent(captor.capture());
         assertEquals(5L, captor.getValue().generation());
+        assertEquals(1L, captor.getValue().userId(), "이벤트는 변경을 요청한 사용자(currentUser)를 실어야 한다");
         assertEquals("REINDEXING", seed.getEmbeddingStatus());
     }
 

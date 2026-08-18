@@ -16,10 +16,16 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
     List<Memory> findByTypeAndStatus(MemoryType type, String status);
 
     /**
-     * ⚠️ 전(全) 사용자 스윕(user_id 스코프 없음) — 재색인 배경잡(ReindexService) 전용. 사용자 대면 목록에는 쓰지 말 것(교차유출). 사용자별
-     * 목록은 {@link #findPage} 를 쓴다. 전역 인덱스(idx_memory_status_created_id)가 이 쿼리를 서빙한다.
+     * {@code userId} 소유 활성(active) memory 전체 — 사용자별 재색인(ReindexService) 기본 경로. 전역 스윕(user_id 스코프 없는
+     * 전 사용자 조회)은 기본 API로 두지 않는다(잘못된 재사용 위험 — 설계 문서 §6). 전(全) 사용자 관리자 잡이 필요하면 호출부가 사용자 id 목록을 순회하며 이
+     * 메서드를 사용자별로 호출한다.
+     *
+     * <p>메서드 이름 파생 규칙상 "find"와 "By" 사이의 낱말("Active")은 조건절이 아니라 무시되는 설명용 텍스트로 처리될 수 있어(Spring Data
+     * 문서), status 조건을 이름 파생에 맡기지 않고 {@code @Query} 로 명시한다 — 상태 필터가 조용히 빠지면(전 상태 반환) 재색인이 폐기된 memory
+     * 까지 재임베딩하는 조용한 정합성 버그가 된다.
      */
-    List<Memory> findByStatusOrderByCreatedAtDesc(String status);
+    @Query("SELECT m FROM Memory m WHERE m.userId = :userId AND m.status = 'active'")
+    List<Memory> findActiveByUserId(@Param("userId") long userId);
 
     /** 상세/상태전이를 소유자 스코프로 — 남의 memory id 를 넘겨도 조회되지 않는다(교차유출 금지). */
     Optional<Memory> findByIdAndUserId(Long id, long userId);
