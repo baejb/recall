@@ -7,6 +7,7 @@ import com.recall.common.BootstrapCurrentUserProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +26,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * <p>사용자2는 일부러 model_setting 행을 만들지 않는다 — 막 가입해 설정을 한 번도 만진 적 없는 사용자가 실제로 이 상태다. {@code
  * isChatConfigured}/{@code isEmbeddingConfigured}는 이 경우도 예외 없이 미설정(false)으로 답해야 한다.
  */
+@Tag("release-gate")
 @SpringBootTest(
         properties = {
             "recall.llm.api-key=test-env-chat-key",

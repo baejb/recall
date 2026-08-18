@@ -7,6 +7,7 @@ import com.recall.common.AiNotConfiguredException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,6 +40,7 @@ class AiContextFactoryTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("미설정 사용자는 chat/embeddingReady=false, require*는 AiNotConfiguredException")
     void unconfiguredUserBlocked() {
         UserAiContext ctx = factory.forUser(user2);
@@ -47,6 +49,7 @@ class AiContextFactoryTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("toString에 키·provider 노출 안 됨")
     void toStringHidesSecrets() {
         assertFalse(factory.forUser(1L).toString().toLowerCase().contains("key"));

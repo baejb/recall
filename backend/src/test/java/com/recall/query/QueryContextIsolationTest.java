@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -66,6 +67,7 @@ class QueryContextIsolationTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("chat 미설정 사용자의 답변 요청은 요청 스레드에서 즉시 차단(409, 격하 아님)")
     void unconfiguredChatBlocksAnswer() {
         when(currentUser.currentUserId()).thenReturn(user2); // user2는 model_setting 행이 없다 = 미설정

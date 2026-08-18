@@ -12,6 +12,7 @@ import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +35,7 @@ class ModelSettingInitializerTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("initializer는 부트스트랩(1) 행만 시드 — 다른 사용자 행을 만들지 않는다")
     void seedsBootstrapOnly() {
         Integer rows = jdbc.queryForObject("SELECT count(*) FROM model_setting", Integer.class);

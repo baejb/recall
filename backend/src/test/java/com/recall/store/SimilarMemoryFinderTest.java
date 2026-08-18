@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -56,6 +57,7 @@ class SimilarMemoryFinderTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("벡터 채널 후보가 남의 memory여도 재조회는 findByIdAndUserId로 걸러낸다(findById 미사용 확인)")
     void vectorCandidateReReadStaysOwnerScoped() {
         EmbeddingClient embeddingClient = mock(EmbeddingClient.class);
@@ -86,6 +88,7 @@ class SimilarMemoryFinderTest {
     }
 
     @Test
+    @Tag("release-gate")
     @DisplayName("BM25 폴백 후보도 재조회는 findByIdAndUserId로 소유자 유지")
     void keywordFallbackCandidateReReadStaysOwnerScoped() {
         EmbeddingClient embeddingClient = mock(EmbeddingClient.class);
