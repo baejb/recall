@@ -68,6 +68,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /** chat/embedding 모델 미설정 상태에서 그 기능을 요구함 — 409(설정 선행 필요). 키 값은 메시지에 담기지 않는다. */
+    @ExceptionHandler(AiNotConfiguredException.class)
+    public ProblemDetail handleAiNotConfigured(AiNotConfiguredException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     /** 아직 구현되지 않은 stub 단계 — 501. Phase 1에서 실제 구현으로 대체된다. */
     @ExceptionHandler(UnsupportedOperationException.class)
     public ProblemDetail handleNotImplemented(UnsupportedOperationException ex) {
