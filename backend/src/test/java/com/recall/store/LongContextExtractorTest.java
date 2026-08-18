@@ -33,7 +33,7 @@ class LongContextExtractorTest {
         }
 
         @Override
-        public Map<String, Object> extract(String maskedText) {
+        public Map<String, Object> extract(String maskedText, UserAiContext ctx) {
             calls++;
             Map<String, Object> card = new LinkedHashMap<>();
             card.put("title", "T" + calls);

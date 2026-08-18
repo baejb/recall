@@ -60,12 +60,14 @@ public class LongContextExtractor {
     public Map<String, Object> extract(MemoryType type, String maskedText, UserAiContext ctx) {
         ExtractionStrategy strategy = extractions.get(type);
         if (maskedText == null || maskedText.length() <= SINGLE_PASS_MAX_CHARS) {
-            return strategy.extract(maskedText); // 단일 패스(S2)
+            return strategy.extract(maskedText, ctx); // 단일 패스(S2)
         }
         List<String> chunks = chunk(maskedText, CHUNK_CHARS, OVERLAP_CHARS);
         log.info("S3 긴맥락 추출: {}자 → {}조각 Map-Reduce", maskedText.length(), chunks.size());
         List<Map<String, Object>> partials =
-                chunks.stream().map(strategy::extract).toList(); // Map — 조각마다 S2
+                chunks.stream()
+                        .map(chunkText -> strategy.extract(chunkText, ctx))
+                        .toList(); // Map — 조각마다 S2
         return reduce(partials, ctx); // Reduce
     }
 

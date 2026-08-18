@@ -104,7 +104,7 @@ public class StorePipeline {
                     similarMemoryFinder.findSimilar(capture.getUserId(), structured, type, ctx);
             Map<String, Object> existing =
                     similar.map(m -> parse(m.getStructured())).orElseGet(Map::of);
-            Judgement judgement = judges.get(type).judge(structured, existing);
+            Judgement judgement = judges.get(type).judge(structured, existing, ctx);
 
             stage = "review";
             // targetMemoryId는 judge가 알 수 없어 여기서 후보 id로 채운다(NEW면 대상 없음).

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
 import com.recall.common.PromptLoader;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.type.Judgement;
 import com.recall.memory.type.SimilarityJudgeStrategy;
 import com.recall.memory.type.Verdict;
@@ -28,14 +29,12 @@ public class KnowledgeJudge implements SimilarityJudgeStrategy {
     /** S4 판정 시스템 프롬프트 리소스 경로(코드가 아니라 콘텐츠라 파일로 분리). */
     private static final String PROMPT_PATH = "prompts/knowledge-judgement.md";
 
-    private final LlmClient llmClient;
     private final String systemPrompt;
 
     private final ObjectMapper objectMapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    public KnowledgeJudge(LlmClient llmClient, PromptLoader promptLoader) {
-        this.llmClient = llmClient;
+    public KnowledgeJudge(PromptLoader promptLoader) {
         this.systemPrompt = promptLoader.load(PROMPT_PATH);
     }
 
@@ -45,10 +44,13 @@ public class KnowledgeJudge implements SimilarityJudgeStrategy {
     }
 
     @Override
-    public Judgement judge(Map<String, Object> proposed, Map<String, Object> existing) {
+    public Judgement judge(
+            Map<String, Object> proposed, Map<String, Object> existing, UserAiContext ctx) {
         if (existing == null || existing.isEmpty()) {
+            // 유사 후보 자체가 없으면 LLM을 부를 필요가 없다 — ctx.requireChat()도 호출하지 않는다.
             return new Judgement(Verdict.NEW, null, "유사한 기존 기억 없음");
         }
+        LlmClient llmClient = ctx.requireChat();
         String userPrompt = toUserPrompt(proposed, existing);
         String raw;
         try {
