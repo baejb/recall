@@ -1,5 +1,6 @@
 package com.recall.query;
 
+import com.recall.common.CurrentUserProvider;
 import com.recall.query.dto.QueryRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,13 +15,16 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class QueryController {
 
     private final AnswerStreamer answerStreamer;
+    private final CurrentUserProvider currentUser;
 
-    public QueryController(AnswerStreamer answerStreamer) {
+    public QueryController(AnswerStreamer answerStreamer, CurrentUserProvider currentUser) {
         this.answerStreamer = answerStreamer;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
     public SseEmitter query(@Valid @RequestBody QueryRequest request) {
-        return answerStreamer.stream(request.question());
+        // 소유자는 요청 스레드에서 해석해 SSE로 넘긴다(가상 스레드엔 SecurityContext 미전파).
+        return answerStreamer.stream(request.question(), currentUser.currentUserId());
     }
 }

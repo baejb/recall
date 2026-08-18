@@ -80,8 +80,9 @@ public class StorePipeline {
             Map<String, Object> structured = longContextExtractor.extract(type, event.maskedText());
 
             stage = "judge";
-            // S4 — 유사 기존 기억을 찾아 대조 판정. 후보가 없으면 빈 맵을 넘겨 NEW로 귀결.
-            Optional<Memory> similar = similarMemoryFinder.findSimilar(structured, type);
+            // S4 — 유사 기존 기억을 찾아 대조 판정. 같은 사용자(capture 소유자)의 기억끼리만 대조한다.
+            Optional<Memory> similar =
+                    similarMemoryFinder.findSimilar(capture.getUserId(), structured, type);
             Map<String, Object> existing =
                     similar.map(m -> parse(m.getStructured())).orElseGet(Map::of);
             Judgement judgement = judges.get(type).judge(structured, existing);

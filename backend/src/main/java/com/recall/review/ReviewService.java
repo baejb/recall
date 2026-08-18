@@ -3,7 +3,9 @@ package com.recall.review;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.common.CurrentUserProvider;
 import com.recall.common.MemoryType;
+import com.recall.common.NotFoundException;
 import com.recall.common.SecretMasking;
 import com.recall.common.StrategyRegistry;
 import com.recall.llm.EmbeddingClient;
@@ -30,6 +32,7 @@ public class ReviewService {
     private final MemoryRepository memoryRepository;
     private final MemorySearchStore searchStore;
     private final EmbeddingClient embeddingClient;
+    private final CurrentUserProvider currentUser;
     private final StrategyRegistry<SearchRepresentation> searchReps;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -38,18 +41,22 @@ public class ReviewService {
             MemoryRepository memoryRepository,
             MemorySearchStore searchStore,
             EmbeddingClient embeddingClient,
+            CurrentUserProvider currentUser,
             List<SearchRepresentation> searchRepresentations) {
         this.reviewRepository = reviewRepository;
         this.memoryRepository = memoryRepository;
         this.searchStore = searchStore;
         this.embeddingClient = embeddingClient;
+        this.currentUser = currentUser;
         this.searchReps = new StrategyRegistry<>(searchRepresentations);
     }
 
     /** 승인 대기(pending) 목록을 오래된 순으로. */
     @Transactional(readOnly = true)
     public List<ReviewItemResponse> listPending() {
-        return reviewRepository.findByStatusOrderByCreatedAtAsc("pending").stream()
+        return reviewRepository
+                .findByUserIdAndStatusOrderByCreatedAtAsc(currentUser.currentUserId(), "pending")
+                .stream()
                 .map(ReviewService::toResponse)
                 .toList();
     }
@@ -57,7 +64,7 @@ public class ReviewService {
     /** 승인 대기 건수. */
     @Transactional(readOnly = true)
     public long countPending() {
-        return reviewRepository.countByStatus("pending");
+        return reviewRepository.countByUserIdAndStatus(currentUser.currentUserId(), "pending");
     }
 
     /** 승인 — 제안(proposed)을 memory로 확정하고 검색 인덱스를 채운 뒤 검토 항목을 approved로 전이한다. */
@@ -134,8 +141,9 @@ public class ReviewService {
     private ReviewItem findPending(Long reviewId) {
         ReviewItem item =
                 reviewRepository
-                        .findById(reviewId)
-                        .orElseThrow(() -> new IllegalArgumentException("검토 항목 없음: " + reviewId));
+                        .findByIdAndUserId(reviewId, currentUser.currentUserId())
+                        // 없거나 남의 것이면 404 — 존재를 노출하지 않는다(by-id 접근 격리, CLAUDE.md).
+                        .orElseThrow(() -> new NotFoundException("검토 항목 없음: " + reviewId));
         if (!"pending".equals(item.getStatus())) {
             throw new IllegalStateException(
                     "이미 처리된 검토 항목: " + reviewId + " (" + item.getStatus() + ")");

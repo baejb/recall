@@ -43,6 +43,11 @@ public class SettingsService {
         this.publisher = publisher;
     }
 
+    // TODO(멀티유저 후속 — 별도 PR): model_setting 은 아직 전역 단일 행(id=1)이라 BYO 키/모델 설정이
+    //   전 사용자 공유다. 사용자별 키로 가려면 (1) V12 로 model_setting 에 user_id, (2) 이 조회를 현재
+    //   사용자 행으로, (3) SettingsBackedLlm/EmbeddingClient 가 "설정 사용자"를 동기(요청 경계)·비동기
+    //   (capture 소유자)·재색인(사용자별) 진입점마다 세팅한 컨텍스트로 해석하게, (4) 재색인 사용자별.
+    //   범위가 async LLM/임베딩 경로까지 퍼지는 서브시스템이라 격리 PR과 분리한다.
     private ModelSetting row() {
         return repository
                 .findById(1L)

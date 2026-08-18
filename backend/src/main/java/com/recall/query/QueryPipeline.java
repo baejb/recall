@@ -108,8 +108,8 @@ public class QueryPipeline {
      * memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
      */
     @Transactional(readOnly = true)
-    public List<Memory> retrieve(String question, MemoryType type) {
-        return searchService.search(question, type);
+    public List<Memory> retrieve(String question, MemoryType type, long userId) {
+        return searchService.search(userId, question, type);
     }
 
     /** LLM 분류 출력에서 유형을 뽑는다. 트러블슈팅 신호가 없으면 기본 KNOWLEDGE. */

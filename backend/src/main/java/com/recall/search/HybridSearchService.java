@@ -57,15 +57,18 @@ public class HybridSearchService {
      * 질문에 대한 유형별 하이브리드 검색 결과(융합 순위 순). embedding_status가 READY가 아니면(REINDEXING: 신구 모델 혼재, FAILED:
      * 재색인이 중간에 실패해 신구 모델 벡터 혼재) 벡터 채널을 건너뛰고 BM25만 사용한다(격하).
      */
-    public List<Memory> search(String question, MemoryType type) {
+    public List<Memory> search(long userId, String question, MemoryType type) {
         boolean vectorReady = STATUS_READY.equals(settings.embeddingStatus());
         List<Long> vectorIds =
                 vectorReady
                         ? ids(
                                 store.searchByVector(
-                                        embeddingClient.embedQuery(question), type, CHANNEL_K))
+                                        userId,
+                                        embeddingClient.embedQuery(question),
+                                        type,
+                                        CHANNEL_K))
                         : List.of();
-        List<Long> bm25Ids = ids(store.searchByKeyword(question, type, CHANNEL_K));
+        List<Long> bm25Ids = ids(store.searchByKeyword(userId, question, type, CHANNEL_K));
 
         Map<String, List<Long>> ranked = Map.of(CH_VECTOR, vectorIds, CH_BM25, bm25Ids);
         Map<String, Double> weights = plans.get(type).channelWeights();

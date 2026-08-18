@@ -36,15 +36,19 @@ public class MemorySearchStore {
                 memoryId);
     }
 
-    /** 코사인 유사도(1 - 거리) 상위 k. memory별 여러 kind 중 가장 가까운 값으로 집계. */
-    public List<ScoredMemory> searchByVector(float[] query, MemoryType type, int k) {
+    /**
+     * 코사인 유사도(1 - 거리) 상위 k. memory별 여러 kind 중 가장 가까운 값으로 집계. memory.user_id 필터로 소유자 스코프(교차유출 금지 —
+     * memory_embedding 은 user_id 를 두지 않고 memory join 으로 격리한다).
+     */
+    public List<ScoredMemory> searchByVector(long userId, float[] query, MemoryType type, int k) {
         return jdbc.query(
                 "SELECT e.memory_id AS id, MAX(1 - (e.vector <=> CAST(? AS vector))) AS score "
                         + "FROM memory_embedding e JOIN memory m ON m.id = e.memory_id "
-                        + "WHERE m.type = ? AND m.status = 'active' "
+                        + "WHERE m.user_id = ? AND m.type = ? AND m.status = 'active' "
                         + "GROUP BY e.memory_id ORDER BY score DESC LIMIT ?",
                 (rs, i) -> new ScoredMemory(rs.getLong("id"), rs.getDouble("score")),
                 toVectorLiteral(query),
+                userId,
                 type.name(),
                 k);
     }
@@ -53,7 +57,7 @@ public class MemorySearchStore {
      * 전문검색(BM25 유사) 상위 k. 질의 토큰을 OR로 결합해 부분 매칭한다. plainto_tsquery는 토큰을 AND로 묶어, 형태소 사전이 없는 한국어에선 조사
      * 차이(방법 vs 방법이다)로 매칭이 거의 안 되기 때문이다.
      */
-    public List<ScoredMemory> searchByKeyword(String query, MemoryType type, int k) {
+    public List<ScoredMemory> searchByKeyword(long userId, String query, MemoryType type, int k) {
         // 질의를 tsvector로 정규화 → lexeme들을 ' | '(OR)로 이어 tsquery 생성.
         String orQuery =
                 "to_tsquery('simple', array_to_string(tsvector_to_array(to_tsvector('simple', ?)), ' | '))";
@@ -62,12 +66,13 @@ public class MemorySearchStore {
                         + orQuery
                         + ") AS score "
                         + "FROM memory "
-                        + "WHERE type = ? AND status = 'active' "
+                        + "WHERE user_id = ? AND type = ? AND status = 'active' "
                         + "AND search_tsv @@ "
                         + orQuery
                         + " ORDER BY score DESC LIMIT ?",
                 (rs, i) -> new ScoredMemory(rs.getLong("id"), rs.getDouble("score")),
                 query,
+                userId,
                 type.name(),
                 query,
                 k);

@@ -37,16 +37,18 @@ public class AnswerStreamer {
     }
 
     /** 질문에 대한 답변을 SSE로 스트리밍하는 emitter를 만든다(가상 스레드에서 블로킹 LLM 스트림을 소비). */
-    public SseEmitter stream(String question) {
+    public SseEmitter stream(String question, long userId) {
         SseEmitter emitter = new SseEmitter(TIMEOUT_MS);
-        Thread.ofVirtual().name("sse-answer-").start(() -> emit(emitter, question));
+        // 소유자(userId)는 요청 스레드에서 이미 해석해 넘겨받는다 — SSE 가상 스레드에는
+        // SecurityContext(thread-local)가 전파되지 않으므로 여기서 다시 풀지 않는다(교차유출 방지).
+        Thread.ofVirtual().name("sse-answer-").start(() -> emit(emitter, question, userId));
         return emitter;
     }
 
-    void emit(SseEmitter emitter, String question) {
+    void emit(SseEmitter emitter, String question, long userId) {
         try {
             MemoryType type = pipeline.classify(question); // C — 질문 유형(지식/트슈)
-            List<Memory> candidates = pipeline.retrieve(question, type); // R·W
+            List<Memory> candidates = pipeline.retrieve(question, type, userId); // R·W
             if (candidates.isEmpty()) {
                 // 근거 없음 → 지어내지 않고 "기록 없음"(LLM 미호출).
                 emitter.send(

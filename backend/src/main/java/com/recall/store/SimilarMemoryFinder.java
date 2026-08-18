@@ -44,8 +44,12 @@ public class SimilarMemoryFinder {
         this.searchReps = new StrategyRegistry<>(searchRepresentations);
     }
 
-    /** proposed와 유사한 기존 active memory 최상위 후보(없으면 empty). */
-    public Optional<Memory> findSimilar(Map<String, Object> structured, MemoryType type) {
+    /**
+     * proposed와 유사한 기존 active memory 최상위 후보(없으면 empty). 판정(S4)은 같은 사용자의 기억끼리만 대조한다 — userId 는 처리 중인
+     * 원문 (capture)의 소유자다(교차유출 금지).
+     */
+    public Optional<Memory> findSimilar(
+            long userId, Map<String, Object> structured, MemoryType type) {
         String text = representativeText(structured, type);
         if (text.isBlank()) {
             return Optional.empty();
@@ -53,7 +57,7 @@ public class SimilarMemoryFinder {
 
         float[] vector = embeddingClient.embedDocument(text);
         Optional<Long> byVector =
-                searchStore.searchByVector(vector, type, K).stream()
+                searchStore.searchByVector(userId, vector, type, K).stream()
                         .filter(s -> s.score() >= TAU_SIM)
                         .map(ScoredMemory::memoryId)
                         .findFirst();
@@ -61,7 +65,7 @@ public class SimilarMemoryFinder {
             return memoryRepository.findById(byVector.get());
         }
 
-        return searchStore.searchByKeyword(text, type, K).stream()
+        return searchStore.searchByKeyword(userId, text, type, K).stream()
                 .map(ScoredMemory::memoryId)
                 .findFirst()
                 .flatMap(memoryRepository::findById);
