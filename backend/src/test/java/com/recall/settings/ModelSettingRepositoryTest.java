@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,21 @@ class ModelSettingRepositoryTest {
         ModelSetting s = repository.findById(1L).orElseThrow();
         assertEquals("anthropic", s.getChatProvider());
         assertEquals("READY", s.getEmbeddingStatus());
+    }
+
+    @Test
+    @DisplayName("findByUserId로 부트스트랩(1) 설정 조회")
+    void findsByUserId() {
+        assertTrue(repository.findByUserId(1L).isPresent());
+    }
+
+    @Test
+    @DisplayName("세대 펜싱은 user_id로 스코프 — 다른 사용자 세대는 안 건드림")
+    void generationFencingScopedByUser() {
+        // 부트스트랩(1) 현재 세대로만 갱신되고, 존재하지 않는 user 2 조건은 0행.
+        long gen = repository.findByUserId(1L).orElseThrow().getEmbeddingGeneration();
+        assertEquals(1, repository.updateEmbeddingStatusIfGeneration(1L, "READY", gen));
+        assertEquals(0, repository.updateEmbeddingStatusIfGeneration(2L, "READY", gen));
     }
 
     /**
