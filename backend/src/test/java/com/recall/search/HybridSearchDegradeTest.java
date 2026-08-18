@@ -93,4 +93,19 @@ class HybridSearchDegradeTest {
 
         verify(store).searchByVector(eq(1L), any(), eq(MemoryType.KNOWLEDGE), anyInt());
     }
+
+    @Test
+    @DisplayName("READY인데 외부 임베딩 호출이 일시 실패하면 벡터 채널만 격하하고 BM25로 응답한다(질의 전체 실패 아님)")
+    void degradesVectorChannelOnEmbeddingFailure() {
+        EmbeddingClient embedding = mock(EmbeddingClient.class);
+        UserAiContext ready = new UserAiContext(1L, null, embedding, true, true);
+        when(settings.embeddingStatus(1L)).thenReturn("READY");
+        when(embedding.embedQuery(any())).thenThrow(new RuntimeException("임베딩 API 일시 실패(외부 장애)"));
+        when(store.searchByKeyword(anyLong(), any(), any(), anyInt())).thenReturn(List.of());
+
+        // 설정은 됐으나 외부 호출이 실패 — 예외가 위로 전파되지 않고 BM25만으로 정상 반환(설계 §4 격하).
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> newService().search("q", MemoryType.KNOWLEDGE, ready));
+        verify(store).searchByKeyword(eq(1L), eq("q"), eq(MemoryType.KNOWLEDGE), anyInt());
+    }
 }

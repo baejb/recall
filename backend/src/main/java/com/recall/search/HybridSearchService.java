@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,6 +23,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class HybridSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(HybridSearchService.class);
 
     /** 채널별로 융합 전에 가져올 후보 수. */
     private static final int CHANNEL_K = 20;
@@ -62,21 +66,29 @@ public class HybridSearchService {
         long userId = ctx.userId();
         boolean vectorReady =
                 ctx.embeddingReady() && STATUS_READY.equals(settings.embeddingStatus(userId));
-        List<Long> vectorIds =
-                vectorReady
-                        ? ids(
-                                store.searchByVector(
-                                        userId,
-                                        ctx.embedding().embedQuery(question),
-                                        type,
-                                        CHANNEL_K))
-                        : List.of();
+        List<Long> vectorIds = vectorReady ? vectorChannel(question, type, ctx) : List.of();
         List<Long> bm25Ids = ids(store.searchByKeyword(userId, question, type, CHANNEL_K));
 
         Map<String, List<Long>> ranked = Map.of(CH_VECTOR, vectorIds, CH_BM25, bm25Ids);
         Map<String, Double> weights = plans.get(type).channelWeights();
         List<Long> fused = RrfFusion.fuse(ranked, weights);
         return loadInOrder(fused);
+    }
+
+    /**
+     * 벡터 채널 검색. 설정은 됐으나(embeddingReady + READY) 외부 임베딩 호출/벡터 검색이 <b>일시 실패</b>하면 예외를 위로 던져 질의 전체를
+     * 죽이지 않고, 벡터 채널만 격하해 빈 결과를 돌린다 — BM25 채널만으로 응답한다(설계 §4 "벡터 실패→BM25", 조용한 실패 금지: 로그로 드러냄). 이는
+     * 미설정(차단)과 다른 상황(외부 장애 격하)이다.
+     */
+    private List<Long> vectorChannel(String question, MemoryType type, UserAiContext ctx) {
+        try {
+            return ids(
+                    store.searchByVector(
+                            ctx.userId(), ctx.embedding().embedQuery(question), type, CHANNEL_K));
+        } catch (RuntimeException e) {
+            log.warn("벡터 채널 격하(외부 임베딩/검색 실패) → BM25만: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     private static List<Long> ids(List<ScoredMemory> scored) {
