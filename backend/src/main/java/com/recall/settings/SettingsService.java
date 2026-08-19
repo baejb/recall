@@ -75,6 +75,15 @@ public class SettingsService {
                         () -> new IllegalStateException("model_setting 미초기화(user=" + userId + ")"));
     }
 
+    /**
+     * 조회 경로용 — 아직 자기 행이 없는 사용자(막 가입해 설정을 한 번도 저장하지 않음)에게는 미저장 기본 행을 돌린다. 쓰기가 없어 {@code readOnly}
+     * 트랜잭션에서 안전하며, 최초 {@link #update(SettingsUpdate)} 전까지 '미설정'(키 없음) 뷰로 보인다. 행을 여기서 만들지 않는 이유: 조회가
+     * 부수효과로 행을 심으면 안 되고(승인/설정은 저장 경로의 몫), 프로브 실패한 최초 PUT 이 롤백될 때 남는 행도 없어야 한다.
+     */
+    private ModelSetting rowOrDefault(long userId) {
+        return repository.findByUserId(userId).orElseGet(() -> ModelSetting.forUser(userId));
+    }
+
     @Transactional(readOnly = true)
     public EmbeddingProperties currentEmbedding() {
         return embeddingFor(currentUser.currentUserId());
@@ -83,7 +92,7 @@ public class SettingsService {
     /** {@code userId} 소유 설정으로 {@link EmbeddingProperties}를 해석한다(키는 복호화, env 폴백은 부트스트랩만). */
     @Transactional(readOnly = true)
     public EmbeddingProperties embeddingFor(long userId) {
-        return embeddingPropsFrom(userId, row(userId));
+        return embeddingPropsFrom(userId, rowOrDefault(userId));
     }
 
     /** 행(row)의 현재 값으로 {@link EmbeddingProperties}를 구성한다(키는 복호화, 없으면 env 폴백 — 부트스트랩만). */
@@ -102,7 +111,7 @@ public class SettingsService {
     /** {@code userId} 소유 설정으로 {@link LlmProperties}를 해석한다(키는 복호화, env 폴백은 부트스트랩만). */
     @Transactional(readOnly = true)
     public LlmProperties chatFor(long userId) {
-        ModelSetting s = row(userId);
+        ModelSetting s = rowOrDefault(userId);
         String key = resolveChatKey(userId, s.getChatApiKeyEnc());
         String baseUrl = baseUrlOr(s.getChatBaseUrl(), envChat.baseUrl());
         return new LlmProperties(
@@ -163,7 +172,7 @@ public class SettingsService {
      */
     @Transactional(readOnly = true)
     public String embeddingStatus(long userId) {
-        return row(userId).getEmbeddingStatus();
+        return rowOrDefault(userId).getEmbeddingStatus();
     }
 
     @Transactional
@@ -191,7 +200,11 @@ public class SettingsService {
     @Transactional
     public UpdateResult update(SettingsUpdate u) {
         long userId = currentUser.currentUserId();
-        ModelSetting s = row(userId);
+        // upsert — 자기 행이 없는 신규 사용자의 최초 PUT 이면 기본 행을 만들어(온보딩) 입력을 얹는다.
+        // 기존 사용자면 관리 엔티티를 그대로 변경한다. 아래 probe 실패 시 트랜잭션이 롤백되어
+        // (신규였다면) 행이 남지 않는다 — 근거 없는/미검증 행을 심지 않는다.
+        boolean isNew = repository.findByUserId(userId).isEmpty();
+        ModelSetting s = isNew ? ModelSetting.forUser(userId) : row(userId);
         boolean reindexNeeded = false;
 
         // base-url 오버라이드는 https 스킴만 허용(SSRF 여지 축소). null=변경 없음, ""=해제는 통과.
@@ -274,6 +287,12 @@ public class SettingsService {
             s.setEmbeddingGeneration(gen);
             s.setEmbeddingStatus(EmbeddingStatus.REINDEXING);
             publisher.publishEvent(new EmbeddingModelChangedEvent(userId, gen));
+        }
+
+        // 신규 행은 명시적으로 영속화한다(기존 관리 엔티티는 dirty-checking 으로 반영되지만 신규
+        // transient 는 save 하지 않으면 커밋에 포함되지 않는다). probe 성공 뒤에만 여기 도달한다.
+        if (isNew) {
+            repository.save(s);
         }
 
         return new UpdateResult(reindexNeeded);
