@@ -37,7 +37,8 @@ class CaptureRawFlowTest {
 
     @Test
     void rawEndpointReturnsMaskedRawTextAndSourceType() throws Exception {
-        Capture capture = captureRepository.save(new Capture("chat", "마스킹된 원문 [REDACTED]", "[]"));
+        Capture capture =
+                captureRepository.save(new Capture(1L, "chat", "마스킹된 원문 [REDACTED]", "[]"));
         createdCaptures.add(capture.getId());
 
         mockMvc.perform(get("/api/captures/{id}", capture.getId()))
@@ -64,7 +65,7 @@ class CaptureRawFlowTest {
 
     @Test
     void activeAndRawRoutesCoexistWithoutShadowing() throws Exception {
-        Capture capture = captureRepository.save(new Capture("chat", "라우트 공존 확인용 원문", "[]"));
+        Capture capture = captureRepository.save(new Capture(1L, "chat", "라우트 공존 확인용 원문", "[]"));
         createdCaptures.add(capture.getId());
 
         // 리터럴 라우트(/active)가 여전히 상태 목록(200)을 반환한다.

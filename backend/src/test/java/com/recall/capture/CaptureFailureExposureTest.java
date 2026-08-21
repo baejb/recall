@@ -3,11 +3,16 @@ package com.recall.capture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recall.llm.AiContextFactory;
+import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.review.ReviewItem;
 import com.recall.review.ReviewRepository;
 import com.recall.store.SimilarMemoryFinder;
@@ -52,12 +57,21 @@ class CaptureFailureExposureTest {
     /** 추출 단계의 LLM 은 stub(null→fallback)으로 — 무네트워크로 judge 단계까지 진행. */
     @MockitoBean private LlmClient llmClient;
 
+    /**
+     * 소유자(bootstrap 사용자) AI 컨텍스트를 항상 ready로 고정한다 — 이 테스트는 context 단계가 아니라 judge 단계 실패를 검증하므로, 테스트
+     * 환경에 실제 chat/embedding 키가 없어도(로컬 dev 셸 밖) context 게이트에서 조기 실패하지 않게 한다.
+     */
+    @MockitoBean private AiContextFactory contextFactory;
+
     private final List<Long> createdCaptures = new ArrayList<>();
 
     @BeforeEach
     void arrange() {
         when(llmClient.complete(any(), any())).thenReturn(null);
-        when(similarMemoryFinder.findSimilar(any(), any()))
+        when(contextFactory.forUser(anyLong()))
+                .thenReturn(
+                        new UserAiContext(1L, llmClient, mock(EmbeddingClient.class), true, true));
+        when(similarMemoryFinder.findSimilar(anyLong(), any(), any(), any()))
                 .thenThrow(new RuntimeException("판정 단계 강제 실패(테스트)"));
     }
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.recall.common.BadRequestException;
+import com.recall.common.CurrentUserProvider;
 import com.recall.common.SecretCipher;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.EmbeddingClientFactory;
@@ -28,6 +29,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClientResponseException;
 
 class SettingsServiceProbeTest {
+
+    /** 테스트는 전부 부트스트랩 사용자(1) 스코프 — 기존(단일 사용자) 동작을 그대로 검증한다. */
+    private static final CurrentUserProvider BOOTSTRAP_USER = () -> 1L;
 
     /** 키 회전을 저장할 수 있게 활성화된(fail-closed 아닌) cipher — fail-closed 자체는 SettingsServiceTest에서 검증한다. */
     private static SecretCipher enabledCipher() throws Exception {
@@ -57,7 +61,8 @@ class SettingsServiceProbeTest {
                 new LlmProperties("anthropic", "", null, null, 4096),
                 factory,
                 realCatalog(),
-                publisher);
+                publisher,
+                BOOTSTRAP_USER);
     }
 
     /** env 임베딩 키가 비어 있는 서비스 — P1-b(유효 키 없는 재색인 거부) 검증용. */
@@ -73,7 +78,8 @@ class SettingsServiceProbeTest {
                 new LlmProperties("anthropic", "", null, null, 4096),
                 factory,
                 realCatalog(),
-                publisher);
+                publisher,
+                BOOTSTRAP_USER);
     }
 
     private ModelSetting seedRow() {
@@ -90,7 +96,7 @@ class SettingsServiceProbeTest {
     void probeFailureRejectsSaveAndNoStatusChange() {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         // factory 가 예외 던지는 임베딩 클라이언트를 반환하도록 구성
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
@@ -106,7 +112,8 @@ class SettingsServiceProbeTest {
                         new LlmProperties("anthropic", "", null, null, 4096),
                         factory,
                         realCatalog(),
-                        mock(ApplicationEventPublisher.class));
+                        mock(ApplicationEventPublisher.class),
+                        BOOTSTRAP_USER);
 
         assertThrows(
                 EmbeddingProbeException.class,
@@ -134,7 +141,7 @@ class SettingsServiceProbeTest {
     void embeddingKeyOnlyChangeProbesButDoesNotReindex() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         EmbeddingClient good = mock(EmbeddingClient.class);
@@ -163,7 +170,7 @@ class SettingsServiceProbeTest {
     void embeddingProviderChangeProbesAndTriggersReindex() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         EmbeddingClient good = mock(EmbeddingClient.class);
@@ -196,7 +203,7 @@ class SettingsServiceProbeTest {
     void probeFailureFromHttpErrorReportsStatusOnlyNotBody() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         // provider가 HTTP 401을 던지되, (일부 런타임/버전에서는) 예외 메시지 자체에 응답 바디·키가
         // 실릴 수 있다고 가정 — 이 바디/메시지가 클라이언트로 그대로 흘러나가면 안 되고, 상태코드
@@ -249,7 +256,7 @@ class SettingsServiceProbeTest {
     void probeFailureFromGenericExceptionMasksKeyInMessage() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         // HTTP 상태 예외가 아닌 저수준 예외(예: RestClient가 요청 URI를 메시지에 그대로 담는 IO
         // 오류)의 메시지에 키가 섞여 나오는 경우도 방어적으로 마스킹돼야 한다.
@@ -286,7 +293,7 @@ class SettingsServiceProbeTest {
     void chatOnlyChangeSkipsProbeAndReindex() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -310,7 +317,7 @@ class SettingsServiceProbeTest {
     void chatProviderChangeWithoutKeyIsRejected() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -333,7 +340,7 @@ class SettingsServiceProbeTest {
     void chatProviderChangeWithoutModelUsesProviderDefault() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -358,7 +365,7 @@ class SettingsServiceProbeTest {
     void chatProviderChangeWithModelUsesGivenModel() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -379,7 +386,7 @@ class SettingsServiceProbeTest {
     void embeddingChangeWithoutValidKeyIsRejectedAndVectorsProtected() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
@@ -410,7 +417,7 @@ class SettingsServiceProbeTest {
     void embeddingProviderChangeWithKeyNoModelUsesDefaultAndReindexes() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         EmbeddingClient good = mock(EmbeddingClient.class);
@@ -443,7 +450,7 @@ class SettingsServiceProbeTest {
     void nonHttpsChatBaseUrlIsRejected() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         SettingsService svc =
                 newService(
@@ -470,7 +477,7 @@ class SettingsServiceProbeTest {
     void nonHttpsEmbeddingBaseUrlIsRejected() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         SettingsService svc =
                 newService(
@@ -500,7 +507,7 @@ class SettingsServiceProbeTest {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
         seed.setEmbeddingGeneration(4L);
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         EmbeddingClient good = mock(EmbeddingClient.class);
@@ -518,6 +525,7 @@ class SettingsServiceProbeTest {
                 ArgumentCaptor.forClass(EmbeddingModelChangedEvent.class);
         verify(publisher).publishEvent(captor.capture());
         assertEquals(5L, captor.getValue().generation());
+        assertEquals(1L, captor.getValue().userId(), "이벤트는 변경을 요청한 사용자(currentUser)를 실어야 한다");
         assertEquals("REINDEXING", seed.getEmbeddingStatus());
     }
 
@@ -526,7 +534,7 @@ class SettingsServiceProbeTest {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
         seed.setEmbeddingGeneration(4L);
-        when(repo.findById(1L)).thenReturn(Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         SettingsService svc = newService(repo, mock(EmbeddingClientFactory.class), publisher);

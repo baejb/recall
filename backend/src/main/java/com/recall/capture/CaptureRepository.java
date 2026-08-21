@@ -2,6 +2,7 @@ package com.recall.capture;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,8 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 /** capture 저장/조회 창구. JpaRepository 상속만으로 save/findById/findAll 등이 자동 제공된다. */
 public interface CaptureRepository extends JpaRepository<Capture, Long> {
 
-    /** 처리 중/실패한(아직 검토 대기함에 오르지 않은) 캡처를 최신순으로 — 상태 노출 엔드포인트용. */
-    List<Capture> findByStatusInOrderByCreatedAtDesc(Collection<String> statuses);
+    /** 처리 중/실패한(아직 검토 대기함에 오르지 않은) 캡처를 최신순으로 — 상태 노출 엔드포인트용(사용자 스코프). */
+    List<Capture> findByUserIdAndStatusInOrderByCreatedAtDesc(
+            long userId, Collection<String> statuses);
+
+    /** 원본 캡처 조회를 소유자 스코프로 — 남의 capture id 를 넘겨도 조회되지 않는다(교차유출 금지). */
+    Optional<Capture> findByIdAndUserId(Long id, long userId);
 
     /**
      * 실패 상태를 원자적으로, 그리고 자기 소유의 새 트랜잭션에 기록한다(REQUIRES_NEW). 파이프라인 트랜잭션이 롤백/무의미하게 커밋돼도 FAILED 는 독립적으로

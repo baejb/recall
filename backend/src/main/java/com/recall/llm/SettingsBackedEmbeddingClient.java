@@ -2,7 +2,13 @@ package com.recall.llm;
 
 import com.recall.settings.SettingsService;
 
-/** 소비자에 주입되는 임베딩 프록시. 매 호출 현재 설정으로 팩토리에서 클라이언트를 얻어 위임한다(런타임 설정 변경 즉시 반영). */
+/**
+ * 소비자에 주입되던 임베딩 프록시(매 호출 현재 설정으로 팩토리에서 클라이언트를 얻어 위임).
+ *
+ * @deprecated {@link SettingsBackedLlmClient}과 동일 — 파이프라인은 {@link AiContextFactory#forUser(long)}의
+ *     임베딩을 쓴다. @Async/SSE 스레드에서 안전하지 않음. OAuth 후속에서 제거 예정.
+ */
+@Deprecated
 public class SettingsBackedEmbeddingClient implements EmbeddingClient {
 
     private final SettingsService settings;

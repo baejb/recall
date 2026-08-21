@@ -4,21 +4,29 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 
 import com.recall.capture.Capture;
 import com.recall.capture.CaptureRepository;
 import com.recall.common.MemoryType;
+import com.recall.llm.AiContextFactory;
+import com.recall.llm.LlmClient;
+import com.recall.llm.StubEmbeddingClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.MemoryRepository;
 import com.recall.memory.type.Verdict;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * 🔴 릴리스 차단 게이트 — <b>충돌 자동 덮어쓰기 금지</b>(불변 원칙 #3). 모순되는 후보(CONFLICT)를 승인해도 기존 기억을 덮어쓰거나 지우지 않고, 두
@@ -33,9 +41,29 @@ class ConflictOverwriteGateTest {
     @Autowired ReviewRepository reviewRepository;
     @Autowired CaptureRepository captureRepository;
 
+    /**
+     * 이 게이트는 충돌 보존 로직을 검증하는 것이지 임베딩 설정 여부를 검증하는 게 아니다 — 소유자(bootstrap) 임베딩 컨텍스트를 항상 ready로 고정해, 로컬
+     * dev 셸에 실제 embedding 키가 없어도(Task 8: 승인 인덱싱이 소유자 embedding 미설정 시 409로 막는다) 이 테스트가 그 게이트에서 조기
+     * 실패하지 않게 한다. 클라이언트는 stub(무네트워크)로 결정적이다.
+     */
+    @MockitoBean private AiContextFactory contextFactory;
+
     private final List<Long> memIds = new ArrayList<>();
     private final List<Long> reviewIds = new ArrayList<>();
     private Long captureId;
+
+    @BeforeEach
+    void stubContext() {
+        when(contextFactory.forUser(anyLong()))
+                .thenAnswer(
+                        inv ->
+                                new UserAiContext(
+                                        (long) inv.getArgument(0),
+                                        (LlmClient) (system, user) -> "",
+                                        new StubEmbeddingClient(),
+                                        true,
+                                        true));
+    }
 
     @AfterEach
     void cleanup() {
@@ -52,7 +80,7 @@ class ConflictOverwriteGateTest {
     @Test
     @DisplayName("🔴 충돌(CONFLICT) 승인은 기존 기억을 덮어쓰지 않는다 — 두 기록 보존")
     void conflictApprovalDoesNotOverwriteExisting() {
-        Capture c = captureRepository.save(new Capture("chat", "마스킹된 원문", "[]"));
+        Capture c = captureRepository.save(new Capture(1L, "chat", "마스킹된 원문", "[]"));
         captureId = c.getId();
 
         // 기존 기억(포트=8080)

@@ -7,12 +7,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.recall.common.BootstrapCurrentUserProvider;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+@SpringBootTest
 class ModelSettingInitializerTest {
+
+    @Autowired JdbcTemplate jdbc;
 
     /** V4 시드 상태(anthropic/voyage, configured=false)를 흉내낸 실제 엔티티. */
     private ModelSetting seedRow() {
@@ -26,12 +35,23 @@ class ModelSettingInitializerTest {
     }
 
     @Test
+    @Tag("release-gate")
+    @DisplayName("initializer는 부트스트랩(1) 행만 시드 — 다른 사용자 행을 만들지 않는다")
+    void seedsBootstrapOnly() {
+        Integer rows = jdbc.queryForObject("SELECT count(*) FROM model_setting", Integer.class);
+        assertEquals(1, rows, "부팅 후 model_setting은 부트스트랩 1행뿐");
+        assertEquals(
+                1L, (long) jdbc.queryForObject("SELECT user_id FROM model_setting", Long.class));
+    }
+
+    @Test
     void seedsProviderModelAndBaseUrlFromEnvOnFirstBoot() {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting row = seedRow();
         row.setChatApiKeyEnc("enc-chat"); // 키 컬럼은 시더가 건드리면 안 된다
         row.setEmbeddingApiKeyEnc("enc-embedding");
-        when(repo.findById(1L)).thenReturn(Optional.of(row));
+        when(repo.findByUserId(BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID))
+                .thenReturn(Optional.of(row));
 
         ModelSettingInitializer init =
                 new ModelSettingInitializer(
@@ -65,7 +85,8 @@ class ModelSettingInitializerTest {
         ModelSetting row = seedRow();
         row.setChatProvider("google"); // UI 로 이미 편집된 값
         row.setConfigured(true);
-        when(repo.findById(1L)).thenReturn(Optional.of(row));
+        when(repo.findByUserId(BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID))
+                .thenReturn(Optional.of(row));
 
         ModelSettingInitializer init =
                 new ModelSettingInitializer(

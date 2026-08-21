@@ -2,7 +2,10 @@ package com.recall.memory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.common.BadRequestException;
+import com.recall.common.CurrentUserProvider;
 import com.recall.common.MemoryType;
+import com.recall.common.NotFoundException;
 import com.recall.memory.dto.MemoryCounts;
 import com.recall.memory.dto.MemoryDetailResponse;
 import com.recall.memory.dto.MemoryPageResponse;
@@ -13,10 +16,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /** memory 조회 서비스. */
 @Service
@@ -35,10 +36,12 @@ public class MemoryService {
             Set.of(STATUS_ACTIVE, STATUS_ARCHIVED, STATUS_INCORRECT);
 
     private final MemoryRepository memoryRepository;
+    private final CurrentUserProvider currentUser;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public MemoryService(MemoryRepository memoryRepository) {
+    public MemoryService(MemoryRepository memoryRepository, CurrentUserProvider currentUser) {
         this.memoryRepository = memoryRepository;
+        this.currentUser = currentUser;
     }
 
     /**
@@ -67,10 +70,12 @@ public class MemoryService {
         // null 파라미터의 타입 추론 실패(lower(bytea))도 피한다.
         String qNorm = (q == null || q.isBlank()) ? "" : q.trim();
         MemoryCursor cur = decodeCursor(cursor);
+        long userId = currentUser.currentUserId();
 
         // limit+1 개를 요청해, 초과분 존재로 다음 페이지 유무를 한 번의 쿼리로 판단한다.
         List<Memory> rows =
                 memoryRepository.findPage(
+                        userId,
                         st,
                         typeFilter,
                         qNorm,
@@ -94,9 +99,11 @@ public class MemoryService {
         if (cur == null) {
             counts =
                     new MemoryCounts(
-                            memoryRepository.countByStatus(st, null, qNorm),
-                            memoryRepository.countByStatus(st, MemoryType.TROUBLESHOOTING, qNorm),
-                            memoryRepository.countByStatus(st, MemoryType.KNOWLEDGE, qNorm));
+                            memoryRepository.countByStatus(userId, st, null, qNorm),
+                            memoryRepository.countByStatus(
+                                    userId, st, MemoryType.TROUBLESHOOTING, qNorm),
+                            memoryRepository.countByStatus(
+                                    userId, st, MemoryType.KNOWLEDGE, qNorm));
         }
         return new MemoryPageResponse(items, nextCursor, counts);
     }
@@ -110,18 +117,15 @@ public class MemoryService {
         String st = requireStatus(status);
         Memory memory =
                 memoryRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () ->
-                                        new ResponseStatusException(
-                                                HttpStatus.NOT_FOUND, "없는 memory: " + id));
+                        .findByIdAndUserId(id, currentUser.currentUserId())
+                        .orElseThrow(() -> new NotFoundException("없는 memory: " + id));
         memory.setStatus(st);
         return toDetailResponse(memoryRepository.save(memory));
     }
 
     private static String requireStatus(String status) {
         if (status == null || !ALLOWED_STATUSES.contains(status)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 status: " + status);
+            throw new BadRequestException("잘못된 status: " + status);
         }
         return status;
     }
@@ -137,8 +141,7 @@ public class MemoryService {
         return switch (type) {
             case "ts" -> MemoryType.TROUBLESHOOTING;
             case "kn" -> MemoryType.KNOWLEDGE;
-            default ->
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 type: " + type);
+            default -> throw new BadRequestException("잘못된 type: " + type);
         };
     }
 
@@ -149,7 +152,7 @@ public class MemoryService {
         try {
             return MemoryCursor.decode(cursor);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 커서");
+            throw new BadRequestException("잘못된 커서");
         }
     }
 
@@ -158,11 +161,8 @@ public class MemoryService {
     public MemoryDetailResponse getDetail(Long id) {
         Memory memory =
                 memoryRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () ->
-                                        new ResponseStatusException(
-                                                HttpStatus.NOT_FOUND, "없는 memory: " + id));
+                        .findByIdAndUserId(id, currentUser.currentUserId())
+                        .orElseThrow(() -> new NotFoundException("없는 memory: " + id));
         return toDetailResponse(memory);
     }
 

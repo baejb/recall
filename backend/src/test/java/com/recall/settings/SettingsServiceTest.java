@@ -3,6 +3,7 @@ package com.recall.settings;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.recall.common.CurrentUserProvider;
 import com.recall.common.SecretCipher;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
@@ -21,6 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
 class SettingsServiceTest {
+
+    /** 테스트는 전부 부트스트랩 사용자(1) 스코프 — 기존(단일 사용자) 동작을 그대로 검증한다. */
+    private static final CurrentUserProvider BOOTSTRAP_USER = () -> 1L;
 
     private static SecretCipher realCipher() throws Exception {
         KeyGenerator kg = KeyGenerator.getInstance("AES");
@@ -54,7 +58,7 @@ class SettingsServiceTest {
     void updateRejectsUnsupportedEmbeddingProvider() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(java.util.Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(java.util.Optional.of(seed));
         SettingsService svc =
                 new SettingsService(
                         repo,
@@ -63,7 +67,8 @@ class SettingsServiceTest {
                         new LlmProperties("anthropic", "", null, null, 4096),
                         mock(EmbeddingClientFactory.class),
                         realCatalog(),
-                        mock(ApplicationEventPublisher.class));
+                        mock(ApplicationEventPublisher.class),
+                        BOOTSTRAP_USER);
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
@@ -83,7 +88,7 @@ class SettingsServiceTest {
     void failClosedWhenCipherDisabledAndKeyGiven() {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
         ModelSetting seed = seedRow();
-        when(repo.findById(1L)).thenReturn(java.util.Optional.of(seed));
+        when(repo.findByUserId(1L)).thenReturn(java.util.Optional.of(seed));
         SettingsService svc =
                 new SettingsService(
                         repo,
@@ -92,7 +97,8 @@ class SettingsServiceTest {
                         new LlmProperties("anthropic", "", null, null, 4096),
                         mock(EmbeddingClientFactory.class),
                         realCatalog(),
-                        mock(ApplicationEventPublisher.class));
+                        mock(ApplicationEventPublisher.class),
+                        BOOTSTRAP_USER);
         assertThrows(
                 IllegalStateException.class,
                 () ->
@@ -109,7 +115,7 @@ class SettingsServiceTest {
         row.setChatModel("claude-opus-4-8");
         row.setEmbeddingProvider("voyage");
         row.setEmbeddingStatus("READY");
-        when(repo.findById(1L)).thenReturn(java.util.Optional.of(row));
+        when(repo.findByUserId(1L)).thenReturn(java.util.Optional.of(row));
         SettingsService svc =
                 new SettingsService(
                         repo,
@@ -118,7 +124,8 @@ class SettingsServiceTest {
                         new LlmProperties("anthropic", "", null, "https://env-chat", 4096),
                         mock(EmbeddingClientFactory.class),
                         realCatalog(),
-                        mock(ApplicationEventPublisher.class));
+                        mock(ApplicationEventPublisher.class),
+                        BOOTSTRAP_USER);
 
         // DB 값 없음 → env 폴백
         assertEquals("https://env-chat", svc.currentChat().baseUrl());
@@ -139,7 +146,7 @@ class SettingsServiceTest {
         row.setChatModel("claude-opus-4-8");
         row.setEmbeddingProvider("voyage");
         row.setEmbeddingStatus("READY");
-        when(repo.findById(1L)).thenReturn(java.util.Optional.of(row));
+        when(repo.findByUserId(1L)).thenReturn(java.util.Optional.of(row));
         SettingsService svc =
                 new SettingsService(
                         repo,
@@ -148,7 +155,8 @@ class SettingsServiceTest {
                         new LlmProperties("anthropic", "", null, null, 4096),
                         mock(EmbeddingClientFactory.class),
                         realCatalog(),
-                        mock(ApplicationEventPublisher.class));
+                        mock(ApplicationEventPublisher.class),
+                        BOOTSTRAP_USER);
 
         svc.update(new SettingsUpdate(null, null, null, "https://db-chat", null, null, null, null));
         assertEquals("https://db-chat", row.getChatBaseUrl());

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
 import com.recall.common.StrategyRegistry;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.type.AnswerContribution;
 import com.recall.query.dto.AnswerFragment;
@@ -26,9 +27,14 @@ import org.springframework.transaction.annotation.Transactional;
  * 조회 파이프라인: 질문 → 분류(C) → 하이브리드 검색(R·W) → 리랭크(RR) → 답변(A). 답변은 저장된 근거(memory)에 매이고, 근거가 없으면 지어내지 않고
  * 빈 결과(상위가 "기록 없음")를 낸다.
  *
+ * <p>LLM이 필요한 단계(C·RR·A)는 호출부가 넘긴 {@link UserAiContext#requireChat()}로 그때그때 클라이언트를 얻는다 — 주입된 전역
+ * {@code LlmClient} 싱글턴을 쓰지 않는다(사용자별 provider/키 교차유출 방지). chat 미설정(요청 자체가 차단돼야 하는 경우)은 이미 조회 입구
+ * ({@code QueryController})에서 걸러지므로, 여기서의 {@code requireChat()}은 방어적 가드다 — 정상 흐름에서는 던지지 않는다.
+ *
  * <p>분류(C)는 LLM이 질문 유형을 판정하되 <b>등록된 유형이 1개뿐이면 LLM 없이 그 유형</b>으로 격하한다(TS 전략이 자가등록되면 자동 활성화).
- * 검색(R·W)은 vector+BM25 융합(결정론). 리랭크(RR)는 W 상위 후보를 LLM이 질문 관련도로 재정렬한다(실패/미가용 시 W 순서 유지 — 격하). 답변(A)은
- * 근거만으로 LLM이 재구성해 토큰 단위로 스트리밍한다(미가용/실패 시 요약 격하).
+ * 검색(R·W)은 vector+BM25 융합(결정론) — 임베딩 채널은 {@code ctx.embeddingReady()}일 때만 쓴다(미설정이면 BM25만으로 격하, 요청을
+ * 막지 않는다). 리랭크(RR)는 W 상위 후보를 LLM이 질문 관련도로 재정렬한다(호출 실패 시 W 순서 유지 — 격하). 답변(A)은 근거만으로 LLM이 재구성해 토큰
+ * 단위로 스트리밍한다(호출 실패 시 요약 격하). 설정 미완료(차단)와 설정 완료 후 외부 API 호출 실패(격하)는 서로 다른 상황이다 — 하나로 섞지 않는다.
  */
 @Component
 public class QueryPipeline {
@@ -68,32 +74,30 @@ public class QueryPipeline {
 
     private final HybridSearchService searchService;
     private final StrategyRegistry<AnswerContribution> answers;
-    private final LlmClient llmClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public QueryPipeline(
-            HybridSearchService searchService,
-            List<AnswerContribution> answerContributions,
-            LlmClient llmClient) {
+            HybridSearchService searchService, List<AnswerContribution> answerContributions) {
         this.searchService = searchService;
         this.answers = new StrategyRegistry<>(answerContributions);
-        this.llmClient = llmClient;
     }
 
     /**
      * C — 질문 유형 분류(🔵 확률적). <b>지원되는 유형으로만</b> 분류한다: 전략이 등록된 유형이 1개뿐이면(현재 KNOWLEDGE만) 분류가 무의미하므로
-     * LLM을 부르지 않고 그 유형을 반환한다 — 새 유형(예: TROUBLESHOOTING) 전략이 자가등록되면 자동으로 분류가 켜진다. LLM 미가용/실패/미지원 유형
-     * 출력은 기본 유형으로 격하한다(조용한 실패 금지). 유형별로 검색 표현·플랜 가중치·답변 전략이 갈린다.
+     * LLM을 부르지 않고 그 유형을 반환한다 — 새 유형(예: TROUBLESHOOTING) 전략이 자가등록되면 자동으로 분류가 켜진다. 유형이 2개 이상이면 {@code
+     * ctx.requireChat()}로 클라이언트를 얻는다(정상 흐름에선 조회 입구가 이미 chatReady를 보장). 호출 실패/미지원 유형 출력은 기본 유형으로
+     * 격하한다(조용한 실패 금지). 유형별로 검색 표현·플랜 가중치·답변 전략이 갈린다.
      */
-    public MemoryType classify(String question) {
+    public MemoryType classify(String question, UserAiContext ctx) {
         Set<MemoryType> supported = answers.registered();
         MemoryType fallback =
                 supported.isEmpty() || supported.contains(MemoryType.KNOWLEDGE)
                         ? MemoryType.KNOWLEDGE
                         : supported.iterator().next();
-        if (supported.size() <= 1 || !llmClient.available()) {
-            return fallback; // 유형이 하나뿐이거나 LLM 미가용 → 분류 불필요/불가
+        if (supported.size() <= 1) {
+            return fallback; // 유형이 하나뿐 → 분류 불필요, chat 미설정이어도 도달 가능해야 한다.
         }
+        LlmClient llmClient = ctx.requireChat();
         try {
             MemoryType type = parseType(llmClient.complete(CLASSIFY_SYSTEM, question));
             return supported.contains(type) ? type : fallback; // 미지원 유형이면 격하
@@ -104,12 +108,12 @@ public class QueryPipeline {
     }
 
     /**
-     * 하이브리드 검색(R·W) → 근거 후보(주어진 유형으로). 트랜잭션은 검색 쿼리에만 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된
-     * memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
+     * 하이브리드 검색(R·W) → 근거 후보(주어진 유형으로). 소유자·임베딩 채널 가용성은 {@code ctx}로 관통한다(요청 입력 userId 신뢰 금지). 트랜잭션은
+     * 검색 쿼리에만 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된 memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
      */
     @Transactional(readOnly = true)
-    public List<Memory> retrieve(String question, MemoryType type) {
-        return searchService.search(question, type);
+    public List<Memory> retrieve(String question, MemoryType type, UserAiContext ctx) {
+        return searchService.search(question, type, ctx);
     }
 
     /** LLM 분류 출력에서 유형을 뽑는다. 트러블슈팅 신호가 없으면 기본 KNOWLEDGE. */
@@ -124,21 +128,18 @@ public class QueryPipeline {
         return MemoryType.KNOWLEDGE;
     }
 
-    /** 실제 LLM(비-stub)이 연동됐는지 — 답변 경로가 LLM 합성 vs 결정론 폴백을 고른다. */
-    public boolean llmReady() {
-        return llmClient.available();
-    }
-
     /**
-     * RR — W 상위 후보를 LLM이 질문 관련도로 재정렬해 상위 {@link #RR_OUTPUT_MAX}개를 낸다. 파싱 실패·예외는 W 순서를 유지한다(격하 — 조용한
-     * 실패 금지). LLM이 누락한 후보는 뒤에 붙여 근거 유실을 막는다. 후보가 1개 이하면 재정렬은 무의미하므로 그대로 둔다.
+     * RR — W 상위 후보를 LLM이 질문 관련도로 재정렬해 상위 {@link #RR_OUTPUT_MAX}개를 낸다. 후보가 1개 이하면 재정렬은 무의미하므로 chat
+     * 호출 없이 그대로 둔다. 그 외엔 {@code ctx.requireChat()}로 클라이언트를 얻는다(정상 흐름에선 조회 입구가 이미 chatReady를 보장). 호출
+     * 실패·파싱 실패는 W 순서를 유지한다(격하 — 조용한 실패 금지). LLM이 누락한 후보는 뒤에 붙여 근거 유실을 막는다.
      */
-    public List<Memory> rerank(String question, List<Memory> candidates) {
+    public List<Memory> rerank(String question, List<Memory> candidates, UserAiContext ctx) {
         if (candidates.size() <= 1) {
             return candidates;
         }
         List<Memory> pool =
                 candidates.size() > RR_INPUT_MAX ? candidates.subList(0, RR_INPUT_MAX) : candidates;
+        LlmClient llmClient = ctx.requireChat();
         try {
             String out =
                     llmClient.complete(
@@ -169,14 +170,20 @@ public class QueryPipeline {
         return memories.size() > RR_OUTPUT_MAX ? memories.subList(0, RR_OUTPUT_MAX) : memories;
     }
 
-    /** 근거만으로 답을 합성해 토큰을 {@code onToken}으로 흘린다(A, 스트리밍). LLM 실패는 예외로 드러낸다 — 호출부가 폴백을 결정한다. */
+    /**
+     * 근거만으로 답을 합성해 토큰을 {@code onToken}으로 흘린다(A, 스트리밍). {@code ctx.requireChat()}로 클라이언트를 얻는다(정상
+     * 흐름에선 조회 입구가 이미 chatReady를 보장). LLM 호출 실패는 예외로 드러낸다 — 호출부(AnswerStreamer)가 요약 격하를 결정한다.
+     */
     public void composeStreaming(
-            String question, List<Memory> candidates, Consumer<String> onToken) {
-        llmClient.completeStream(
-                ANSWER_SYSTEM, buildEvidencePrompt(question, candidates, objectMapper), onToken);
+            String question, List<Memory> candidates, Consumer<String> onToken, UserAiContext ctx) {
+        ctx.requireChat()
+                .completeStream(
+                        ANSWER_SYSTEM,
+                        buildEvidencePrompt(question, candidates, objectMapper),
+                        onToken);
     }
 
-    /** 격하(LLM 미가용/실패): 각 근거를 유형별 전략으로 렌더(요약)해 근거(memory id)와 함께 조각으로 낸다 — 나열이지만 근거에 매여 있다. */
+    /** 격하(호출 실패): 각 근거를 유형별 전략으로 렌더(요약)해 근거(memory id)와 함께 조각으로 낸다 — 나열이지만 근거에 매여 있다. */
     public List<AnswerFragment> fallbackFragments(List<Memory> candidates) {
         return candidates.stream()
                 .map(

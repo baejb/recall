@@ -24,6 +24,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// 멀티유저 SSO 로그인(OAuth2) — 틀만 배선. 실제 인증/인가 로직은 후속(팀원).
+	// oauth2-client 는 spring-security 를 전이 의존으로 끌어온다.
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 	runtimeOnly 'org.postgresql:postgresql'
@@ -40,7 +43,7 @@ tasks.named('test') {
 }
 
 // 🔴 릴리스 차단 게이트만 실행: ./gradlew releaseGate
-// PRD 치명 3종 회귀 — 민감정보 유출(마스킹 잔존 0)·충돌 자동 덮어쓰기·근거 없는 생성.
+// PRD 치명 회귀 — 민감정보 유출(마스킹 잔존 0)·충돌 자동 덮어쓰기·근거 없는 생성·멀티유저 교차유출.
 // @Tag("release-gate") 붙은 테스트만 돌린다(DB 필요한 케이스 포함).
 tasks.register('releaseGate', Test) {
 	description = '릴리스 차단 게이트(🔴) 회귀 테스트만 실행'

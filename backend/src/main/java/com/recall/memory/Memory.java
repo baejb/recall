@@ -28,6 +28,10 @@ public class Memory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 소유자(app_user.id). 검색·목록이 join 없이 바로 필터하도록 capture 에서 비정규화(멀티유저 격리). */
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     /** 이 카드가 나온 원문. 여러 memory가 한 capture를 가리킴(1:N). */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "capture_id", nullable = false)
@@ -72,15 +76,40 @@ public class Memory {
     /** JPA 전용 기본 생성자. */
     protected Memory() {}
 
+    /**
+     * 영속(persist)되는 카드 — 반드시 소유 capture 가 있어야 하고, user_id 는 거기서 파생한다(비동기 승인 경로에서도 스레드 컨텍스트에 의존하지
+     * 않음). null capture 는 NOT NULL 위반을 flush 시점까지 늦추므로 여기서 막는다.
+     */
     public Memory(Capture capture, MemoryType type, String title, String structured) {
+        if (capture == null) {
+            throw new IllegalArgumentException(
+                    "영속 Memory 는 capture 가 필요하다 — 인메모리 카드는 transientCard 사용");
+        }
         this.capture = capture;
+        this.userId = capture.getUserId();
         this.type = type;
         this.title = title;
         this.structured = structured;
     }
 
+    /**
+     * 영속되지 않는 인메모리 카드 — 리랭크·답변 프롬프트 조립용으로만 쓴다(capture/user_id 없음). 이 객체를 리포지토리에 save 하면 안 된다(NOT
+     * NULL 위반). 영속 경로는 위 생성자를 쓴다.
+     */
+    public static Memory transientCard(MemoryType type, String title, String structured) {
+        Memory m = new Memory();
+        m.type = type;
+        m.title = title;
+        m.structured = structured;
+        return m;
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public Capture getCapture() {

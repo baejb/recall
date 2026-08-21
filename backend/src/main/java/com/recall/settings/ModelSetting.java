@@ -14,6 +14,9 @@ public class ModelSetting {
 
     @Id private Long id;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(name = "chat_provider", nullable = false)
     private String chatProvider;
 
@@ -55,6 +58,10 @@ public class ModelSetting {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getChatProvider() {

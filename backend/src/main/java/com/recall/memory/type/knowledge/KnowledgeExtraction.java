@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.MemoryType;
 import com.recall.common.PromptLoader;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.type.ExtractionStrategy;
 import java.util.List;
 import java.util.Map;
@@ -35,15 +36,13 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     /** S2 추출 시스템 프롬프트 리소스 경로(코드가 아니라 콘텐츠라 파일로 분리). */
     private static final String PROMPT_PATH = "prompts/knowledge-extraction.md";
 
-    private final LlmClient llmClient;
     private final String systemPrompt;
 
     // 이 앱은 주입 가능한 ObjectMapper 빈이 없어 코드베이스 관례대로 내부에서 생성한다(StorePipeline·ReviewService와 동일).
     private final ObjectMapper objectMapper =
             new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    public KnowledgeExtraction(LlmClient llmClient, PromptLoader promptLoader) {
-        this.llmClient = llmClient;
+    public KnowledgeExtraction(PromptLoader promptLoader) {
         this.systemPrompt = promptLoader.load(PROMPT_PATH);
     }
 
@@ -53,12 +52,12 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     }
 
     @Override
-    public Map<String, Object> extract(String maskedText) {
-        KnowledgeCard card = extractCard(maskedText);
+    public Map<String, Object> extract(String maskedText, UserAiContext ctx) {
+        KnowledgeCard card = extractCard(maskedText, ctx.requireChat());
         return objectMapper.convertValue(card, new TypeReference<Map<String, Object>>() {});
     }
 
-    private KnowledgeCard extractCard(String maskedText) {
+    private KnowledgeCard extractCard(String maskedText, LlmClient llmClient) {
         String raw;
         try {
             raw = llmClient.complete(systemPrompt, maskedText);
