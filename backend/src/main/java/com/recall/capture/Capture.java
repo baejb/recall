@@ -30,6 +30,14 @@ public class Capture {
     @Column(name = "masked_spans", nullable = false)
     private String maskedSpans;
 
+    /** 비동기 저장 파이프라인의 처리 상태: PROCESSING | DONE | FAILED (조용한 실패 금지 — 실패도 상태로 노출). */
+    @Column(name = "status", nullable = false)
+    private String status;
+
+    /** 실패한 파이프라인 단계(classify | extract | judge | review). 성공/처리중이면 null. */
+    @Column(name = "failed_stage")
+    private String failedStage;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -41,6 +49,8 @@ public class Capture {
         this.sourceType = sourceType;
         this.rawText = rawText;
         this.maskedSpans = maskedSpans;
+        // 신규 캡처는 비동기 파이프라인이 아직 처리 전이므로 PROCESSING 으로 시작한다.
+        this.status = "PROCESSING";
     }
 
     public Long getId() {
@@ -57,6 +67,22 @@ public class Capture {
 
     public String getMaskedSpans() {
         return maskedSpans;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getFailedStage() {
+        return failedStage;
+    }
+
+    public void setFailedStage(String failedStage) {
+        this.failedStage = failedStage;
     }
 
     public OffsetDateTime getCreatedAt() {

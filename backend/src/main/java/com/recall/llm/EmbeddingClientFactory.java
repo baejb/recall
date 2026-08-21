@@ -1,0 +1,49 @@
+package com.recall.llm;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * 임베딩 설정 → 클라이언트. 등록된 {@link EmbeddingProvider} 서술자만으로 디스패치한다(하드코딩 switch 없음). 가용 provider = 주입된
+ * 서술자 목록이므로 카탈로그와 팩토리가 같은 원천을 공유해 드리프트가 구조적으로 불가능하다.
+ *
+ * <p>동일 설정(provider|model|baseUrl|key 해시)은 캐시 재사용.
+ */
+public class EmbeddingClientFactory {
+
+    private final Map<String, EmbeddingProvider> byName;
+    private final Map<String, EmbeddingClient> cache = new ConcurrentHashMap<>();
+
+    public EmbeddingClientFactory(List<EmbeddingProvider> providers) {
+        Map<String, EmbeddingProvider> map = new HashMap<>();
+        for (EmbeddingProvider p : providers) {
+            EmbeddingProvider previous = map.put(p.name().toLowerCase(), p);
+            if (previous != null) {
+                throw new IllegalStateException(
+                        "한 provider 이름에 embedding 서술자가 둘 이상 등록됨: " + p.name());
+            }
+        }
+        this.byName = Map.copyOf(map);
+    }
+
+    public EmbeddingClient forSettings(EmbeddingProperties props) {
+        if (props.apiKey() == null || props.apiKey().isBlank()) {
+            return new StubEmbeddingClient();
+        }
+        EmbeddingProvider provider = byName.get(props.provider().toLowerCase());
+        if (provider == null) {
+            throw new IllegalStateException("등록되지 않은 provider: " + props.provider());
+        }
+        String cacheKey =
+                props.provider()
+                        + "|"
+                        + props.model()
+                        + "|"
+                        + props.baseUrl()
+                        + "|"
+                        + Integer.toHexString(props.apiKey().hashCode());
+        return cache.computeIfAbsent(cacheKey, k -> provider.create(props));
+    }
+}

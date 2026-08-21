@@ -2,15 +2,11 @@ package com.recall.llm;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 /**
- * Phase 0 walking skeleton용 LLM stub. 실제 provider 구현이 없을 때만 활성화된다 ({@link
- * ConditionalOnMissingBean}). 흐름이 끝까지 돌게 placeholder를 반환하되, stub이 관여했음을 로그로 남긴다(조용한 실패 금지).
+ * Phase 0 walking skeleton용 LLM stub. 실제 provider 어댑터가 없을 때 {@link LlmConfig}가 기본 빈으로 등록한다. 흐름이 끝까지
+ * 돌게 placeholder를 반환하되, stub이 관여했음을 로그로 남긴다(조용한 실패 금지).
  */
-@Component
-@ConditionalOnMissingBean(LlmClient.class)
 public class StubLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(StubLlmClient.class);
@@ -19,5 +15,11 @@ public class StubLlmClient implements LlmClient {
     public String complete(String systemPrompt, String userPrompt) {
         log.warn("[STUB] LlmClient.complete 호출 — 실제 LLM 미연동, placeholder 반환");
         return "[stub-llm-response]";
+    }
+
+    /** stub은 실제 LLM이 아니다 — 답변합성(A)은 이 값을 보고 결정론 폴백으로 격하한다(placeholder 유출 방지). */
+    @Override
+    public boolean available() {
+        return false;
     }
 }

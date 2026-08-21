@@ -1,0 +1,143 @@
+// 백엔드 응답/요청 DTO 미러링(실연동 계약). 백엔드 com.recall.*.dto 와 1:1.
+
+/** GET /api/memories 의 items 요소 */
+export interface MemoryResponse {
+  id: number
+  captureId: number
+  type: string // "KNOWLEDGE" | "TROUBLESHOOTING"
+  title: string
+  summary: string | null
+  status: string // active | superseded | incorrect
+  createdAt: string // ISO OffsetDateTime
+}
+
+/** 유형 탭 카운트(검색어가 걸리면 그 필터 기준). 첫 페이지 응답에만 실리고 이후 스크롤은 null. */
+export interface MemoryCounts {
+  total: number
+  ts: number
+  kn: number
+}
+
+/** GET /api/memories — 키셋 페이지네이션 한 페이지. nextCursor=null 이면 마지막. */
+export interface MemoryPage {
+  items: MemoryResponse[]
+  nextCursor: string | null
+  counts: MemoryCounts | null
+}
+
+/** GET /api/reviews */
+export interface ReviewItemResponse {
+  id: number
+  captureId: number
+  judgement: string // NEW | RECURRENCE | SUPPLEMENT | CONFLICT
+  targetMemoryId: number | null
+  judgeReason: string | null
+  memoryType: string | null
+  status: string // pending | approved | edited | rejected
+  proposed: string // KnowledgeCard JSON 문자열
+  createdAt: string
+}
+
+/** POST /api/captures 요청/응답 */
+export interface CaptureRequest {
+  sourceType?: string
+  rawText: string
+}
+export interface CaptureResponse {
+  captureId: number
+  status: string
+}
+
+/** POST /api/reviews/{id}/approve */
+export interface ApproveResponse {
+  memoryId: number
+}
+
+/** GET /api/reviews/count */
+export interface ReviewCountResponse {
+  pending: number
+}
+
+/** POST /api/query SSE 조각(event: answer) */
+export interface AnswerFragment {
+  text: string
+  memoryId: number | null
+}
+
+/** GET /api/settings/models · PUT 응답 — 실제 키는 절대 내려오지 않는다(apiKeyConfigured 불리언만). */
+export type EmbeddingStatus = 'READY' | 'REINDEXING' | 'FAILED'
+
+export interface ModelSettings {
+  provider: string
+  model: string
+  apiKeyConfigured: boolean
+  baseUrl: string | null
+}
+
+export interface EmbeddingModelSettings extends ModelSettings {
+  status: EmbeddingStatus
+}
+
+export interface SettingsResponse {
+  chat: ModelSettings
+  embedding: EmbeddingModelSettings
+}
+
+/** PUT /api/settings/models 요청. 모든 필드 선택 — 생략/공백 = 변경 없음. apiKey는 사용자가 입력했을 때만. */
+export interface ModelUpdate {
+  provider?: string
+  model?: string
+  apiKey?: string
+  baseUrl?: string
+}
+
+export interface SettingsUpdateRequest {
+  chat?: ModelUpdate
+  embedding?: ModelUpdate
+}
+
+/** GET /api/settings/models/catalog — 역할별 provider→모델 목록. 맵 키 = 그 역할에 허용된 provider. */
+export interface CatalogResponse {
+  chatModels: Record<string, string[]>
+  embeddingModels: Record<string, string[]>
+}
+
+/** GET /api/captures/active — 검토함에 아직 안 올라온 처리중/실패 캡처(조용한 실패 금지). */
+export interface CaptureStatusResponse {
+  id: number
+  status: string // PROCESSING | FAILED
+  sourceType: string
+  failedStage: string | null // classify | extract | judge | review | null
+  createdAt: string
+}
+
+/** proposed / structured 안의 KnowledgeCard(추출 스키마). */
+export interface KnowledgeCard {
+  title?: string
+  summary?: string
+  keywords?: string[]
+  facts?: string[]
+  document?: string
+}
+
+/** GET /api/memories/{id} — 기억 단건 상세(구조화 필드 포함). 없으면 404. */
+export interface MemoryDetailResponse {
+  id: number
+  captureId: number
+  type: string
+  title: string
+  summary: string | null
+  keywords: string[]
+  facts: string[]
+  document: string | null
+  status: string
+  createdAt: string
+}
+
+/** GET /api/captures/{id} — 원본 캡처(마스킹 완료된 원문). 없으면 404. */
+export interface CaptureRawResponse {
+  id: number
+  sourceType: string
+  rawText: string
+  createdAt: string
+}

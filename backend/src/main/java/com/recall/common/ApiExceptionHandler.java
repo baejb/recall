@@ -56,6 +56,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    /** 잘못된 요청(예: 임베딩 설정 저장 전 프로브 실패 — 키/모델 오류 등) — 400. 키 값은 메시지에 담기지 않는다. */
+    @ExceptionHandler(BadRequestException.class)
+    public ProblemDetail handleBadRequest(BadRequestException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     /** 아직 구현되지 않은 stub 단계 — 501. Phase 1에서 실제 구현으로 대체된다. */
     @ExceptionHandler(UnsupportedOperationException.class)
     public ProblemDetail handleNotImplemented(UnsupportedOperationException ex) {

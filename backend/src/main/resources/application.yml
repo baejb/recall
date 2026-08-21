@@ -2,7 +2,7 @@ spring:
   application:
     name: recall
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/recall}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:${POSTGRES_PORT:5432}/recall}
     username: ${SPRING_DATASOURCE_USERNAME:recall}
     password: ${SPRING_DATASOURCE_PASSWORD:recall}
   jpa:
@@ -26,3 +26,19 @@ management:
     web:
       exposure:
         include: health,info
+
+recall:
+  security:
+    secret-key: ${RECALL_SECRET_KEY:}
+  llm:
+    provider: ${RECALL_LLM_PROVIDER:anthropic}   # anthropic | openai | google
+    api-key: ${RECALL_LLM_API_KEY:}              # 비면 stub LLM(추출·판정이 fallback)
+    model: ${RECALL_LLM_MODEL_STRONG:claude-opus-4-8}
+    base-url: ${RECALL_LLM_BASE_URL:}            # 비면 provider 기본 URL
+    max-tokens: 4096
+    embedding:
+      provider: ${RECALL_EMBEDDING_PROVIDER:voyage}   # voyage | openai
+      api-key: ${RECALL_EMBEDDING_API_KEY:${VOYAGE_API_KEY:}}   # 비면 stub 임베딩(벡터 검색 무의미)
+      model: ${RECALL_EMBEDDING_MODEL:}     # 비면 provider별 기본(voyage-3 / text-embedding-3-small)
+      base-url: ${RECALL_EMBEDDING_BASE_URL:}   # 비면 provider별 기본 URL
+      dimension: 1024                       # memory_embedding vector(N)과 일치해야 함(openai는 dimensions로 맞춤)
