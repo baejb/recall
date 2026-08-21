@@ -79,18 +79,14 @@ public class TroubleshootingExtraction implements ExtractionStrategy {
         try {
             TroubleshootingCard parsed = objectMapper.readValue(json, TroubleshootingCard.class);
             // 제목이 비면 승인 시 memory.title이 비므로 원문에서 파생해 보장한다.
-            return parsed.title().isBlank()
-                    ? withTitle(parsed, deriveTitle(maskedText))
-                    : parsed;
+            return parsed.title().isBlank() ? withTitle(parsed, deriveTitle(maskedText)) : parsed;
         } catch (JsonProcessingException e) {
             log.warn("LLM 응답 JSON 파싱 실패 → fallback: {}", e.getMessage());
             return fallback(maskedText);
         }
     }
 
-    /**
-     * 원문을 유실하지 않는 최소 카드 — 제목은 원문 앞부분, 요약·증상은 원문 그대로. 원인·해결은 <b>비워 둔다</b>(모르는 것을 채우지 않는다).
-     */
+    /** 원문을 유실하지 않는 최소 카드 — 제목은 원문 앞부분, 요약·증상은 원문 그대로. 원인·해결은 <b>비워 둔다</b>(모르는 것을 채우지 않는다). */
     private TroubleshootingCard fallback(String maskedText) {
         return new TroubleshootingCard(
                 deriveTitle(maskedText),

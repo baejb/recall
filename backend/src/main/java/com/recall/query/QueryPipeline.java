@@ -238,8 +238,8 @@ public class QueryPipeline {
      * 질문 + 번호 매긴 근거로 A(답변) 사용자 프롬프트를 만든다. 근거 콘텐츠는 마스킹된 원문에서 추출된 것이다.
      *
      * <p>각 근거의 <b>내용은 유형별 전략</b>({@link AnswerContribution#render})이 만든다 — 유형마다 어떤 필드가 근거인지 다르기
-     * 때문이다(지식=사실, 트러블슈팅=증상·시도·원인·해결). 공유 코드는 질문·번호·순서만 담당한다(architecture.md 가드레일 2: 유형별 필드를
-     * 공유 코드에 하드코딩하지 않는다).
+     * 때문이다(지식=사실, 트러블슈팅=증상·시도·원인·해결). 공유 코드는 질문·번호·순서만 담당한다(architecture.md 가드레일 2: 유형별 필드를 공유 코드에
+     * 하드코딩하지 않는다).
      */
     String buildEvidencePrompt(String question, List<Memory> candidates) {
         StringBuilder sb = new StringBuilder();

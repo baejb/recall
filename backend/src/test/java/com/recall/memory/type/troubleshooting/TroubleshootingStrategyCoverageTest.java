@@ -12,8 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 유형 커버리지 — 새 유형은 파이프라인 단계별 SPI <b>5종을 모두</b> 구현해야 한다(하나라도 빠지면 {@code
- * StrategyRegistry.get()}이 런타임에 "등록된 전략이 없는 유형"으로 터진다). 그 계약을 부팅 전에 고정한다.
+ * 유형 커버리지 — 새 유형은 파이프라인 단계별 SPI <b>5종을 모두</b> 구현해야 한다(하나라도 빠지면 {@code StrategyRegistry.get()}이 런타임에
+ * "등록된 전략이 없는 유형"으로 터진다). 그 계약을 부팅 전에 고정한다.
  *
  * <p>P(플래너) 채널 가중치는 결정론이라 값까지 함께 검증한다(PRD 품질기준: "라벨→전략 매핑이 규칙표와 100% 일치, 미정의 0").
  */

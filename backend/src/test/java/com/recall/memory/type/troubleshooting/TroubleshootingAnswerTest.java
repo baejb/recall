@@ -11,8 +11,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * A(답변)의 유형별 기여 — 저장된 근거 필드만 조각으로 낸다. 공유 Composer가 번호·질문·intent를 담당하므로 여기서는 "무엇을 근거로 줄지"만 검증한다.
- * 근거에 없는 문장을 만들지 않는지가 핵심(🔴 근거 없는 생성 금지).
+ * A(답변)의 유형별 기여 — 저장된 근거 필드만 조각으로 낸다. 공유 Composer가 번호·질문·intent를 담당하므로 여기서는 "무엇을 근거로 줄지"만 검증한다. 근거에
+ * 없는 문장을 만들지 않는지가 핵심(🔴 근거 없는 생성 금지).
  */
 class TroubleshootingAnswerTest {
 

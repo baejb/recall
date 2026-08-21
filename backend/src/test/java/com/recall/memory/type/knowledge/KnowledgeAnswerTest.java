@@ -10,8 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * A(답변)의 knowledge 기여 — 답변 프롬프트의 근거 조각이 공유 Composer에서 이 전략으로 옮겨왔으므로(유형별 필드 하드코딩 제거), 기존에 프롬프트가
- * 담던 제목·요약·사실이 그대로 나오는지 회귀로 고정한다.
+ * A(답변)의 knowledge 기여 — 답변 프롬프트의 근거 조각이 공유 Composer에서 이 전략으로 옮겨왔으므로(유형별 필드 하드코딩 제거), 기존에 프롬프트가 담던
+ * 제목·요약·사실이 그대로 나오는지 회귀로 고정한다.
  */
 class KnowledgeAnswerTest {
 

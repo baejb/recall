@@ -59,7 +59,7 @@ tasks.register('releaseGate', Test) {
 // 포맷 검사: ./gradlew spotlessCheck   ·   자동 정리: ./gradlew spotlessApply
 spotless {
 	java {
-		googleJavaFormat('1.25.2').aosp()
+		googleJavaFormat('1.28.0').aosp()
 		removeUnusedImports()
 		trimTrailingWhitespace()
 		endWithNewline()

@@ -11,9 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * 검색 표현(R) — PRD §04의 트러블슈팅 "problem/solution 이중 벡터"를 낸다. 결정론이라 순수 함수 단위테스트로 고정한다(같은 입력=같은 출력).
- */
+/** 검색 표현(R) — PRD §04의 트러블슈팅 "problem/solution 이중 벡터"를 낸다. 결정론이라 순수 함수 단위테스트로 고정한다(같은 입력=같은 출력). */
 class TroubleshootingSearchRepresentationTest {
 
     private final TroubleshootingSearchRepresentation rep =

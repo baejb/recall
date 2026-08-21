@@ -58,8 +58,7 @@ class TroubleshootingJudgeTest {
     @DisplayName("verdict 4종을 그대로 판정으로 옮긴다")
     void parsesEachVerdict() {
         for (Verdict expected : Verdict.values()) {
-            String response =
-                    "{\"verdict\":\"" + expected.name() + "\",\"rationale\":\"같은 시그니처\"}";
+            String response = "{\"verdict\":\"" + expected.name() + "\",\"rationale\":\"같은 시그니처\"}";
             Judgement j = JUDGE.judge(PROPOSED, EXISTING, ctxWithResponse(response));
             assertEquals(expected, j.verdict());
             assertEquals("같은 시그니처", j.rationale());
@@ -70,8 +69,7 @@ class TroubleshootingJudgeTest {
     @Tag("release-gate")
     @DisplayName("🔴 CONFLICT 판정은 그대로 보존한다 — 판정 단계가 임의로 낮추지 않는다(자동 덮어쓰기 금지)")
     void conflictSurvivesJudgement() {
-        String response =
-                "{\"verdict\":\"CONFLICT\",\"rationale\":\"같은 에러인데 해결책이 서로 배타적\"}";
+        String response = "{\"verdict\":\"CONFLICT\",\"rationale\":\"같은 에러인데 해결책이 서로 배타적\"}";
 
         Judgement j = JUDGE.judge(PROPOSED, EXISTING, ctxWithResponse(response));
 

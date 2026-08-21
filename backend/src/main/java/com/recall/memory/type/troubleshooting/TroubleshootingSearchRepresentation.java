@@ -15,8 +15,8 @@ import org.springframework.stereotype.Component;
  *   <li>{@code kind="solution"} — 근본 원인·최종 해결. "결국 어떻게 고쳤지" 류 질문이 걸리는 쪽.
  * </ul>
  *
- * <p>문제와 해결을 한 벡터로 합치지 않는 이유는 둘이 서로 다른 질문에 걸려야 하기 때문이다(PRD: "무엇을 임베딩하나가 연관성의 절반"). 미해결 카드는
- * solution kind를 만들지 않는다 — 빈 텍스트를 임베딩해 의미 없는 벡터를 심지 않는다.
+ * <p>문제와 해결을 한 벡터로 합치지 않는 이유는 둘이 서로 다른 질문에 걸려야 하기 때문이다(PRD: "무엇을 임베딩하나가 연관성의 절반"). 미해결 카드는 solution
+ * kind를 만들지 않는다 — 빈 텍스트를 임베딩해 의미 없는 벡터를 심지 않는다.
  *
  * <p>attempts는 임베딩하지 않는다(PRD는 이중 벡터로 명시). 시도 이력은 keywords·BM25와 리랭크(RR)로 걸리고, 답변 근거로는 {@link
  * TroubleshootingAnswer}가 온전히 싣는다.
@@ -37,12 +37,7 @@ public class TroubleshootingSearchRepresentation implements SearchRepresentation
         Map<String, String> texts = new LinkedHashMap<>();
 
         String problem =
-                join(
-                        structured,
-                        "symptom",
-                        "error_message",
-                        "error_signature",
-                        "environment");
+                join(structured, "symptom", "error_message", "error_signature", "environment");
         if (problem.isBlank()) {
             // 증상 계열이 전부 비면 제목이라도 문제 벡터로 남긴다(카드가 검색에서 사라지지 않게).
             problem = str(structured.get("title"));

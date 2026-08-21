@@ -75,8 +75,7 @@ public record TroubleshootingCard(
      *
      * @param action 시도한 조치
      * @param result 그 결과(관찰된 것)
-     * @param outcome 판정 — {@link #FAILED}·{@link #PARTIAL}·{@link #WORKED}, 판단 불가면 {@link
-     *     #UNKNOWN}
+     * @param outcome 판정 — {@link #FAILED}·{@link #PARTIAL}·{@link #WORKED}, 판단 불가면 {@link #UNKNOWN}
      */
     public record Attempt(String action, String result, String outcome) {
 
