@@ -3,14 +3,14 @@ package com.recall.capture;
 import com.recall.capture.dto.CaptureRawResponse;
 import com.recall.capture.dto.CaptureRequest;
 import com.recall.capture.dto.CaptureStatusResponse;
+import com.recall.common.CurrentUserProvider;
+import com.recall.common.NotFoundException;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 원문 저장 서비스. 마스킹 우선 → 원문(근거) 커밋(유실 금지 앵커) → 저장 방송. */
 @Service
@@ -21,22 +21,28 @@ public class CaptureService {
     private final CaptureRepository captureRepository;
     private final MaskingService maskingService;
     private final ApplicationEventPublisher events;
+    private final CurrentUserProvider currentUser;
     private final TransactionTemplate tx;
 
     public CaptureService(
             CaptureRepository captureRepository,
             MaskingService maskingService,
             ApplicationEventPublisher events,
+            CurrentUserProvider currentUser,
             PlatformTransactionManager txManager) {
         this.captureRepository = captureRepository;
         this.maskingService = maskingService;
         this.events = events;
+        this.currentUser = currentUser;
         this.tx = new TransactionTemplate(txManager);
     }
 
     public Long capture(CaptureRequest request) {
         String sourceType =
                 request.sourceType() == null ? DEFAULT_SOURCE_TYPE : request.sourceType();
+
+        // 소유자 해석(동기 요청 경로) — 이후 memory/review 는 이 capture 의 user_id 에서 파생한다.
+        long userId = currentUser.currentUserId();
 
         // 마스킹 우선(불변 원칙): DB를 건드리지 않는 결정론 단계라 트랜잭션 밖에서 처리해 커넥션 점유를 줄인다.
         MaskingService.MaskResult masked = maskingService.mask(request.rawText());
@@ -48,6 +54,7 @@ public class CaptureService {
                     Capture saved =
                             captureRepository.save(
                                     new Capture(
+                                            userId,
                                             sourceType,
                                             masked.maskedText(),
                                             masked.maskedSpansJson()));
@@ -65,7 +72,8 @@ public class CaptureService {
     @Transactional(readOnly = true)
     public List<CaptureStatusResponse> activeCaptures() {
         return captureRepository
-                .findByStatusInOrderByCreatedAtDesc(List.of("PROCESSING", "FAILED"))
+                .findByUserIdAndStatusInOrderByCreatedAtDesc(
+                        currentUser.currentUserId(), List.of("PROCESSING", "FAILED"))
                 .stream()
                 .map(
                         c ->
@@ -86,11 +94,8 @@ public class CaptureService {
     public CaptureRawResponse getRaw(Long id) {
         Capture capture =
                 captureRepository
-                        .findById(id)
-                        .orElseThrow(
-                                () ->
-                                        new ResponseStatusException(
-                                                HttpStatus.NOT_FOUND, "없는 capture: " + id));
+                        .findByIdAndUserId(id, currentUser.currentUserId())
+                        .orElseThrow(() -> new NotFoundException("없는 capture: " + id));
         return new CaptureRawResponse(
                 capture.getId(),
                 capture.getSourceType(),

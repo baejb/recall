@@ -1,11 +1,16 @@
 package com.recall.query;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.common.AiNotConfiguredException;
 import com.recall.common.MemoryType;
+import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.type.AnswerContribution;
 import java.util.List;
@@ -13,19 +18,28 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** A 그라운딩 프롬프트 + RR(리랭크) 파싱/재정렬/격하의 결정론 검증(순수 로직 — DB·실LLM 불필요). */
+/** A 그라운딩 프롬프트 + RR(리랭크)/C(분류) 파싱·재정렬·격하의 결정론 검증(순수 로직 — DB·실LLM 불필요). */
 class QueryPipelineTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    /** rerank/parseType은 searchService·answers를 쓰지 않으므로 null·빈 목록으로 둔다(생성만; 호출 안 함). */
-    private QueryPipeline pipelineWithLlm(LlmClient llm) {
-        return new QueryPipeline(null, List.of(), llm);
+    /** rerank/classify는 searchService를 쓰지 않으므로 null로 둔다(생성만; 호출 안 함). */
+    private static QueryPipeline pipelineWith(List<AnswerContribution> answers) {
+        return new QueryPipeline(null, answers);
     }
 
-    /** classify는 등록된 유형(answers) 기준으로 분류하므로, 지원 유형 조합을 주입해 만든다. */
-    private QueryPipeline pipelineWith(List<AnswerContribution> answers, LlmClient llm) {
-        return new QueryPipeline(null, answers, llm);
+    /**
+     * chat이 설정된(chatReady=true) ctx — {@code llm}만 바꿔 다양한 LLM 응답/실패를 시뮬레이션한다. embedding은 이 테스트들에서
+     * 쓰이지 않는다.
+     */
+    private static UserAiContext ctxWithLlm(LlmClient llm) {
+        return new UserAiContext(1L, llm, mock(EmbeddingClient.class), true, false);
+    }
+
+    /** chat 미설정(chatReady=false) ctx — requireChat()이 던지는 방어적 가드를 검증할 때 쓴다. */
+    private static UserAiContext ctxChatNotConfigured() {
+        return new UserAiContext(
+                1L, mock(LlmClient.class), mock(EmbeddingClient.class), false, false);
     }
 
     private static AnswerContribution answerFor(MemoryType t) {
@@ -43,7 +57,7 @@ class QueryPipelineTest {
     }
 
     private static Memory mem(int i) {
-        return new Memory(null, MemoryType.KNOWLEDGE, "t" + i, "{\"title\":\"t" + i + "\"}");
+        return Memory.transientCard(MemoryType.KNOWLEDGE, "t" + i, "{\"title\":\"t" + i + "\"}");
     }
 
     private static List<String> titles(List<Memory> memories) {
@@ -56,8 +70,7 @@ class QueryPipelineTest {
     @DisplayName("A 프롬프트에 질문 + 번호 매긴 근거의 제목·요약·사실이 담긴다")
     void evidencePromptCarriesQuestionAndEvidence() {
         Memory m =
-                new Memory(
-                        null,
+                Memory.transientCard(
                         MemoryType.KNOWLEDGE,
                         "게이트웨이 분리",
                         "{\"title\":\"게이트웨이 분리\",\"summary\":\"토폴로지 분리는 끝났다\","
@@ -91,47 +104,51 @@ class QueryPipelineTest {
     @Test
     @DisplayName("rerank: LLM 관련도 순으로 재정렬하고, 누락 후보는 뒤에 보존")
     void reranksByLlmOrderAndKeepsMissing() {
-        QueryPipeline p = pipelineWithLlm((s, u) -> "[2]"); // 2번만 지목
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)));
+        QueryPipeline p = pipelineWith(List.of());
+        UserAiContext ctx = ctxWithLlm((s, u) -> "[2]"); // 2번만 지목
+        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
         assertEquals(List.of("t2", "t1", "t3"), titles(out)); // 2 먼저, 나머지 원순서 보존
     }
 
     @Test
     @DisplayName("rerank: 파싱 실패는 W 순서 유지(격하)")
     void rerankDegradesOnGarbage() {
-        QueryPipeline p = pipelineWithLlm((s, u) -> "관련도를 못 정하겠어요");
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)));
+        QueryPipeline p = pipelineWith(List.of());
+        UserAiContext ctx = ctxWithLlm((s, u) -> "관련도를 못 정하겠어요");
+        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
         assertEquals(List.of("t1", "t2", "t3"), titles(out));
     }
 
     @Test
-    @DisplayName("rerank: LLM 예외는 W 순서 유지(격하)")
+    @DisplayName("rerank: 설정 완료 후 외부 LLM 호출 실패는 W 순서 유지(격하, 미설정 차단과 다름)")
     void rerankDegradesOnException() {
-        QueryPipeline p =
-                pipelineWithLlm(
+        QueryPipeline p = pipelineWith(List.of());
+        UserAiContext ctx =
+                ctxWithLlm(
                         (s, u) -> {
                             throw new RuntimeException("boom");
                         });
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)));
+        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
         assertEquals(List.of("t1", "t2", "t3"), titles(out));
     }
 
     @Test
     @DisplayName("rerank: 상위 RR_OUTPUT_MAX(6)개로 자른다")
     void rerankCapsOutput() {
-        QueryPipeline p = pipelineWithLlm((s, u) -> "[8,7,6,5,4,3,2,1]");
+        QueryPipeline p = pipelineWith(List.of());
+        UserAiContext ctx = ctxWithLlm((s, u) -> "[8,7,6,5,4,3,2,1]");
         List<Memory> in = List.of(mem(1), mem(2), mem(3), mem(4), mem(5), mem(6), mem(7), mem(8));
-        List<Memory> out = p.rerank("q", in);
+        List<Memory> out = p.rerank("q", in, ctx);
         assertEquals(6, out.size());
         assertEquals("t8", out.get(0).getTitle());
     }
 
     @Test
-    @DisplayName("rerank: 후보 1개면 LLM 없이 그대로")
+    @DisplayName("rerank: 후보 1개면 chat 호출 없이 그대로(미설정 ctx라도 통과)")
     void rerankSkipsForSingle() {
-        QueryPipeline p = pipelineWithLlm((s, u) -> "[1]");
+        QueryPipeline p = pipelineWith(List.of());
         List<Memory> in = List.of(mem(1));
-        assertEquals(in, p.rerank("q", in));
+        assertEquals(in, p.rerank("q", in, ctxChatNotConfigured()));
     }
 
     // ── C 분류 ──────────────────────────────────────────────
@@ -152,54 +169,38 @@ class QueryPipelineTest {
     @Test
     @DisplayName("classify: 지원 유형이 2개면 LLM 출력대로 판정")
     void classifyUsesLlmWhenMultipleTypes() {
+        QueryPipeline p = pipelineWith(BOTH_TYPES);
         assertEquals(
                 MemoryType.TROUBLESHOOTING,
-                pipelineWith(BOTH_TYPES, (s, u) -> "TROUBLESHOOTING")
-                        .classify("그 403 에러 어떻게 풀었지?"));
+                p.classify("그 403 에러 어떻게 풀었지?", ctxWithLlm((s, u) -> "TROUBLESHOOTING")));
         assertEquals(
-                MemoryType.KNOWLEDGE,
-                pipelineWith(BOTH_TYPES, (s, u) -> "KNOWLEDGE").classify("RRF가 뭐야?"));
+                MemoryType.KNOWLEDGE, p.classify("RRF가 뭐야?", ctxWithLlm((s, u) -> "KNOWLEDGE")));
     }
 
     @Test
-    @DisplayName("classify: 지원 유형이 1개면 LLM 안 부르고 그 유형(안전 가드 — TS 전략 미구현 시 파이프라인 보호)")
+    @DisplayName("classify: 지원 유형이 1개면 chat 호출 없이 그 유형(미설정 ctx라도 통과 — 안전 가드)")
     void classifySkipsLlmWhenSingleType() {
-        QueryPipeline p =
-                pipelineWith(
-                        List.of(answerFor(MemoryType.KNOWLEDGE)),
-                        (s, u) -> {
-                            throw new AssertionError("단일 유형인데 complete 호출됨");
-                        });
-        assertEquals(MemoryType.KNOWLEDGE, p.classify("그 403 에러 어떻게 풀었지?"));
+        QueryPipeline p = pipelineWith(List.of(answerFor(MemoryType.KNOWLEDGE)));
+        assertEquals(MemoryType.KNOWLEDGE, p.classify("그 403 에러 어떻게 풀었지?", ctxChatNotConfigured()));
     }
 
     @Test
-    @DisplayName("classify: LLM 미가용 → 기본 KNOWLEDGE(격하, complete 미호출)")
-    void classifyDegradesWhenUnavailable() {
-        LlmClient off =
-                new LlmClient() {
-                    @Override
-                    public String complete(String system, String user) {
-                        throw new AssertionError("미가용인데 complete 호출됨");
-                    }
-
-                    @Override
-                    public boolean available() {
-                        return false;
-                    }
-                };
-        assertEquals(MemoryType.KNOWLEDGE, pipelineWith(BOTH_TYPES, off).classify("q"));
+    @DisplayName(
+            "classify: chat 미설정 ctx + 유형 2개 이상 → AiNotConfiguredException(방어적 가드 — 정상 흐름은 조회 입구가 선차단)")
+    void classifyThrowsWhenChatNotReady() {
+        QueryPipeline p = pipelineWith(BOTH_TYPES);
+        assertThrows(AiNotConfiguredException.class, () -> p.classify("q", ctxChatNotConfigured()));
     }
 
     @Test
-    @DisplayName("classify: LLM 예외 → 기본 KNOWLEDGE(격하)")
+    @DisplayName("classify: 설정 완료 후 외부 LLM 호출 실패 → 기본 KNOWLEDGE(격하, 미설정 차단과 다름)")
     void classifyDegradesOnException() {
-        QueryPipeline p =
-                pipelineWith(
-                        BOTH_TYPES,
+        QueryPipeline p = pipelineWith(BOTH_TYPES);
+        UserAiContext ctx =
+                ctxWithLlm(
                         (s, u) -> {
                             throw new RuntimeException("boom");
                         });
-        assertEquals(MemoryType.KNOWLEDGE, p.classify("q"));
+        assertEquals(MemoryType.KNOWLEDGE, p.classify("q", ctx));
     }
 }

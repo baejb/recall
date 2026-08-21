@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.recall.common.MemoryType;
 import com.recall.common.PromptLoader;
+import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.type.ExtractionStrategy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,7 +33,7 @@ class LongContextExtractorTest {
         }
 
         @Override
-        public Map<String, Object> extract(String maskedText) {
+        public Map<String, Object> extract(String maskedText, UserAiContext ctx) {
             calls++;
             Map<String, Object> card = new LinkedHashMap<>();
             card.put("title", "T" + calls);
@@ -40,10 +42,10 @@ class LongContextExtractorTest {
         }
     }
 
-    private static LongContextExtractor extractor(CountingExtraction s2, LlmClient llm) {
+    private static LongContextExtractor extractor(CountingExtraction s2) {
         PromptLoader loader = mock(PromptLoader.class);
         when(loader.load(anyString())).thenReturn("merge prompt");
-        return new LongContextExtractor(List.of(s2), llm, loader);
+        return new LongContextExtractor(List.of(s2), loader);
     }
 
     private static LlmClient llm(String response, boolean available) {
@@ -58,6 +60,14 @@ class LongContextExtractorTest {
                 return available;
             }
         };
+    }
+
+    /**
+     * chat이 설정된(chatReady=true) ctx — {@code llm}만 바꿔 다양한 병합 결과를 시뮬레이션한다. embedding은 이 테스트들에서 쓰이지
+     * 않는다.
+     */
+    private static UserAiContext ctx(LlmClient llm) {
+        return new UserAiContext(1L, llm, mock(EmbeddingClient.class), true, true);
     }
 
     // ── 청킹(🟢 결정론, truncation 없음) ─────────────────────
@@ -110,7 +120,7 @@ class LongContextExtractorTest {
     void shortTextSinglePass() {
         CountingExtraction s2 = new CountingExtraction();
         Map<String, Object> result =
-                extractor(s2, llm("무관", false)).extract(MemoryType.KNOWLEDGE, "짧은 원문");
+                extractor(s2).extract(MemoryType.KNOWLEDGE, "짧은 원문", ctx(llm("무관", false)));
         assertEquals(1, s2.calls);
         assertEquals("T1", result.get("title"));
     }
@@ -121,7 +131,7 @@ class LongContextExtractorTest {
         CountingExtraction s2 = new CountingExtraction();
         String big = "x".repeat(30_000); // 30000자 → size 8000·overlap 500 → 4조각
         Map<String, Object> merged =
-                extractor(s2, llm("무관", false)).extract(MemoryType.KNOWLEDGE, big);
+                extractor(s2).extract(MemoryType.KNOWLEDGE, big, ctx(llm("무관", false)));
 
         assertEquals(4, s2.calls, "조각 수만큼 map 추출");
         assertEquals(List.of("f1", "f2", "f3", "f4"), merged.get("facts"), "모든 조각의 사실 보존(union)");
@@ -134,7 +144,7 @@ class LongContextExtractorTest {
         CountingExtraction s2 = new CountingExtraction();
         LlmClient merger = llm("{\"title\":\"병합됨\",\"facts\":[\"m1\",\"m2\"]}", true);
         Map<String, Object> merged =
-                extractor(s2, merger).extract(MemoryType.KNOWLEDGE, "x".repeat(30_000));
+                extractor(s2).extract(MemoryType.KNOWLEDGE, "x".repeat(30_000), ctx(merger));
 
         assertEquals("병합됨", merged.get("title"));
         assertEquals(List.of("m1", "m2"), merged.get("facts"));
@@ -145,8 +155,11 @@ class LongContextExtractorTest {
     void llmMergeGarbageFallsBack() {
         CountingExtraction s2 = new CountingExtraction();
         Map<String, Object> merged =
-                extractor(s2, llm("병합 못 하겠어요", true))
-                        .extract(MemoryType.KNOWLEDGE, "x".repeat(30_000));
+                extractor(s2)
+                        .extract(
+                                MemoryType.KNOWLEDGE,
+                                "x".repeat(30_000),
+                                ctx(llm("병합 못 하겠어요", true)));
         assertEquals(4, ((List<?>) merged.get("facts")).size()); // 결정론 union
     }
 }

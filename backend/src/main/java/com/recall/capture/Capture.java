@@ -20,6 +20,10 @@ public class Capture {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 소유자(app_user.id) — 멀티유저 격리의 앵커. memory/review 는 이 값에서 파생한다. */
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @Column(name = "source_type", nullable = false)
     private String sourceType;
 
@@ -45,7 +49,8 @@ public class Capture {
     /** JPA 전용 기본 생성자. */
     protected Capture() {}
 
-    public Capture(String sourceType, String rawText, String maskedSpans) {
+    public Capture(Long userId, String sourceType, String rawText, String maskedSpans) {
+        this.userId = userId;
         this.sourceType = sourceType;
         this.rawText = rawText;
         this.maskedSpans = maskedSpans;
@@ -55,6 +60,10 @@ public class Capture {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getSourceType() {

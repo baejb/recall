@@ -1,5 +1,6 @@
 package com.recall.settings;
 
+import com.recall.common.BootstrapCurrentUserProvider;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
 import org.slf4j.Logger;
@@ -17,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>🔴 키 컬럼({@code *_api_key_enc})은 건드리지 않는다 — 키는 env 에 남고 {@link SettingsService}의 복호화 폴백이 env 키를
  * 쓴다. 덕분에 {@code RECALL_SECRET_KEY} 없이도 시드가 동작한다. 시드 후 {@code configured=true}로 잠가 이후 UI 편집을 덮어쓰지
  * 않는다.
+ *
+ * <p>🔴 부트스트랩({@link BootstrapCurrentUserProvider#BOOTSTRAP_USER_ID}) 행만 시드한다 — 다른 사용자의
+ * model_setting 행은 절대 만들거나 건드리지 않는다. 부트스트랩 행이 없으면 시드를 건너뛸 뿐, 대신 다른 사용자 행을 만들지 않는다.
  */
 @Component
 public class ModelSettingInitializer {
@@ -42,9 +46,14 @@ public class ModelSettingInitializer {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void seedFromEnvIfNeeded() {
-        ModelSetting s = repository.findById(1L).orElse(null);
+        ModelSetting s =
+                repository
+                        .findByUserId(BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID)
+                        .orElse(null);
         if (s == null) {
-            log.warn("model_setting(id=1) 미존재 — env 시드를 건너뛴다");
+            log.warn(
+                    "model_setting(user_id={}) 미존재 — env 시드를 건너뛴다",
+                    BootstrapCurrentUserProvider.BOOTSTRAP_USER_ID);
             return;
         }
         if (s.isConfigured()) {

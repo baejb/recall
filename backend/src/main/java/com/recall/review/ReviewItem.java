@@ -29,6 +29,10 @@ public class ReviewItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 소유자(app_user.id) — capture 에서 파생. 대기함 조회를 사용자별로 스코프한다. */
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private Long userId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "capture_id", nullable = false)
     private Capture capture;
@@ -77,6 +81,8 @@ public class ReviewItem {
             String judgeReason,
             String proposed) {
         this.capture = capture;
+        // 소유자는 원문(capture)에서 파생 — 비동기 저장 파이프라인에서 스레드 컨텍스트에 의존하지 않는다.
+        this.userId = capture.getUserId();
         this.type = type;
         this.judgement = judgement;
         this.memory = targetMemory;
@@ -92,6 +98,10 @@ public class ReviewItem {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public Capture getCapture() {

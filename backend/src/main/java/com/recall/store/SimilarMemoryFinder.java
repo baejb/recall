@@ -3,6 +3,7 @@ package com.recall.store;
 import com.recall.common.MemoryType;
 import com.recall.common.StrategyRegistry;
 import com.recall.llm.EmbeddingClient;
+import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
@@ -28,43 +29,49 @@ public class SimilarMemoryFinder {
     /** 채널별로 살펴볼 후보 수. */
     private static final int K = 5;
 
-    private final EmbeddingClient embeddingClient;
     private final MemorySearchStore searchStore;
     private final MemoryRepository memoryRepository;
     private final StrategyRegistry<SearchRepresentation> searchReps;
 
     public SimilarMemoryFinder(
-            EmbeddingClient embeddingClient,
             MemorySearchStore searchStore,
             MemoryRepository memoryRepository,
             List<SearchRepresentation> searchRepresentations) {
-        this.embeddingClient = embeddingClient;
         this.searchStore = searchStore;
         this.memoryRepository = memoryRepository;
         this.searchReps = new StrategyRegistry<>(searchRepresentations);
     }
 
-    /** proposed와 유사한 기존 active memory 최상위 후보(없으면 empty). */
-    public Optional<Memory> findSimilar(Map<String, Object> structured, MemoryType type) {
+    /**
+     * proposed와 유사한 기존 active memory 최상위 후보(없으면 empty). 판정(S4)은 같은 사용자의 기억끼리만 대조한다 — userId 는 처리 중인
+     * 원문 (capture)의 소유자다(교차유출 금지). 임베딩은 {@code ctx.requireEmbedding()}으로 얻는다 — 주입된 전역 싱글턴이 아니라
+     * capture 소유자에 바인딩된 클라이언트만 쓴다.
+     *
+     * <p>후보 재조회는 {@code findByIdAndUserId}로 소유자 조건을 끝까지 유지한다 — 검색 인덱스(searchStore)가 이미 userId로
+     * 스코프하지만, 재조회 지점에서도 owner 조건을 한 번 더 강제해 교차유출 방어를 이중화한다(회귀 가드).
+     */
+    public Optional<Memory> findSimilar(
+            long userId, Map<String, Object> structured, MemoryType type, UserAiContext ctx) {
         String text = representativeText(structured, type);
         if (text.isBlank()) {
             return Optional.empty();
         }
 
+        EmbeddingClient embeddingClient = ctx.requireEmbedding();
         float[] vector = embeddingClient.embedDocument(text);
         Optional<Long> byVector =
-                searchStore.searchByVector(vector, type, K).stream()
+                searchStore.searchByVector(userId, vector, type, K).stream()
                         .filter(s -> s.score() >= TAU_SIM)
                         .map(ScoredMemory::memoryId)
                         .findFirst();
         if (byVector.isPresent()) {
-            return memoryRepository.findById(byVector.get());
+            return memoryRepository.findByIdAndUserId(byVector.get(), userId);
         }
 
-        return searchStore.searchByKeyword(text, type, K).stream()
+        return searchStore.searchByKeyword(userId, text, type, K).stream()
                 .map(ScoredMemory::memoryId)
                 .findFirst()
-                .flatMap(memoryRepository::findById);
+                .flatMap(id -> memoryRepository.findByIdAndUserId(id, userId));
     }
 
     /** 유사 판정에 쓸 대표 텍스트 — 유형별 검색 표현의 document(비면 title). */

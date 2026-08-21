@@ -17,6 +17,18 @@ spring:
   docker:
     compose:
       enabled: false          # DB is provided by the root docker-compose.yml
+  # ── 멀티유저 SSO: Google OAuth2 로그인 (틀만) ────────────────────────────────
+  # 실제 인증/인가 로직은 후속(팀원)이 SecurityConfig 에서 배선한다.
+  # 아래 블록은 client-id/secret 이 비면 ClientRegistrationRepository 생성이 실패하므로
+  # 주석 상태로 둔다 — env 를 채운 뒤 주석을 해제한다.
+  # security:
+  #   oauth2:
+  #     client:
+  #       registration:
+  #         google:
+  #           client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+  #           client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+  #           scope: openid, email, profile
 
 server:
   port: ${BACKEND_PORT:8080}

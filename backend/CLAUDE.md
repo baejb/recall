@@ -51,7 +51,11 @@
 - **스키마 변경은 Flyway 새 마이그레이션(`src/main/resources/db/migration/V__*.sql`)으로만.**
   `ddl-auto=none`이므로 엔티티로 스키마를 만들지 않는다. 기존 마이그레이션 파일은 수정하지 않는다
   (되돌릴 수 없음 — 항상 새 버전 추가).
-- **단일 사용자 전제** — `user` 테이블/`user_id` 컬럼을 만들지 않는다(격리 = 사용자당 DB 1개).
+- **멀티유저(공유 DB + user_id)** — SSO(OAuth) 로그인 도입으로 `app_user` 테이블을 두고, 사용자
+  데이터(`capture`·`memory`·`review_queue`)에 `user_id`를 붙여 파티셔닝한다(db-per-user 기각).
+  **교차유출 금지(🔴)**: 모든 조회/검색 쿼리는 소유자 스코프여야 한다 — 쓰기/비동기는 `capture.user_id`
+  에서 파생, 동기 조회는 `CurrentUserProvider`로 해석. 남의 id 로 by-id 접근은 404. (과거 "단일 사용자 =
+  사용자당 DB" 전제는 폐기)
 - pgvector는 **용도별 이중 임베딩**을 쓴다("무엇을 임베딩하나"가 연관성의 절반). 원문 캡처는
   **검색 인덱싱 대상이 아니라 근거**다.
 
