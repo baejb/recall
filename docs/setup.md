@@ -15,6 +15,18 @@ Recall 저장소에서 Claude Code / 팀원이 **가장 먼저 읽는 가이드*
 5. templates/ 의 개인용 파일을 각자 위치로 복사한다 (§4).
 ```
 
+### 클론 위치 (Windows 필수 조건)
+
+**저장소는 ASCII 경로 · 클라우드 동기화 폴더 밖에 둔다** (예: `C:\dev\recall`). 둘 다 도구가
+조용히가 아니라 요란하게 깨지는 조건이고, 원인을 찾는 데 시간이 든다.
+
+| 조건 | 어기면 |
+|------|--------|
+| 경로에 비ASCII 문자 금지 (사용자 이름 포함 — `C:\Users\홍길동\...` 도 해당) | `./gradlew test` 가 **모든 테스트 클래스를 `ClassNotFoundException`** 으로 실패시킨다(Gradle 테스트 워커 classpath 가 비ASCII 경로를 못 읽는다). 컴파일은 정상이라 원인이 안 보인다 |
+| OneDrive·Dropbox 등 동기화 폴더 밖 | 동기화가 `build/` 의 `.class` 를 플레이스홀더로 바꿔 Gradle 이 `Cannot snapshot … not a regular file` 로 죽는다. 부분 컴파일 산출물로 이어져 증상이 들쭉날쭉하다 |
+
+macOS·Linux 는 해당 없다.
+
 ## 1. 문서 지도
 
 | 문서 | 내용 | 읽는 주체 |
@@ -63,6 +75,9 @@ Recall 저장소에서 Claude Code / 팀원이 **가장 먼저 읽는 가이드*
 | 13 | 2026-08-21 | store | troubleshooting `status` 모르는 값 → `UNRESOLVED`, `outcome` 모르는 값 → `unknown` | 해결됐다고 잘못 단정하는 쪽이 반대보다 위험(근거 없는 생성 금지의 연장). 실패로 위장하지도 않는다 | active |
 | 14 | 2026-08-21 | search | troubleshooting 임베딩 kind = problem·solution 2개(PRD 이중 벡터), 채널 가중치 bm25 2.0 / vector 1.2 | attempts 3번째 kind는 임베딩 비용 1.5배 + PRD 이탈로 기각. 에러 코드·예외명은 정확 토큰 매칭이 벡터보다 강함(PRD §04). 라벨셋 fit 튜닝 대상 | active |
 | 15 | 2026-08-21 | store | 저장 경로 유형 라우팅은 원문 앞 4,000자만 LLM에 넣는다 | 유형은 도입부에서 드러남 · 긴 붙여넣기 토큰 폭발 방지. 추출(S2/S3)은 전문을 겹침 청킹으로 커버하므로 내용 유실 아님(절단은 로그로 노출) | active |
+| 16 | 2026-08-22 | tooling | google-java-format 1.25.2 → **1.28.0** | 1.25.2 가 JDK 25 에서 javac 내부 API 시그니처 변경으로 `NoSuchMethodError` — spotless 가 전 파일에서 죽어 포맷 게이트가 무력했다. 1.28.0 은 기존 코드 출력이 동일(포맷 churn 0) | active |
+| 17 | 2026-08-22 | tooling | prettier `endOfLine: "auto"` + `.prettierignore` 에 `CLAUDE.md` | `.gitattributes` 가 TS/TSX 개행을 정규화하지 않아 Windows 체크아웃(CRLF)과 prettier 기본값(LF)이 충돌 → 새 클론에서 `format:check` 가 항상 실패하고 `npm run format` 이 37파일을 전부 다시 썼다. CLAUDE.md 는 prettier 가 마크다운 강조 표기를 바꿔 규칙 문서를 훼손 | active |
+| 18 | 2026-08-22 | infra | 저장소는 **ASCII 경로 · 동기화 폴더 밖**에 둔다(이 머신 기준 `C:\dev\recall`) | 비ASCII 경로에서 Gradle 테스트 워커가 테스트 클래스를 못 읽어 `./gradlew test` 전량 실패, OneDrive 가 `build/` 를 플레이스홀더로 바꿔 Gradle 스냅샷이 깨진다. 빌드 출력만 옮기는 우회보다 클론 위치를 옮기는 쪽이 표준 명령을 그대로 쓰게 해준다(§0) | active |
 
 ## 4. 개인용 설정 (`templates/`)
 
