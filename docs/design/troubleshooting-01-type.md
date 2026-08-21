@@ -111,8 +111,8 @@ DB가 필요한 `@SpringBootTest`(승인→인덱싱→검색 스모크, 교차�
 
 ## 범위 밖 / 후속
 
-- **프론트 렌더** — 검토·기억 상세 화면의 TS 카드 렌더(증상·시도·원인·해결·상태). 백엔드는
-  `structured`로 이미 필드를 내려보내지만 화면은 아직 knowledge 렌더만 한다.
+- **프론트 렌더** — 이 슬라이스에서는 `structured`로 필드를 내려보내는 것까지만 했다.
+  화면 렌더는 슬라이스 2에서 완료 → [troubleshooting-02-frontend.md](troubleshooting-02-frontend.md).
 - **RR 리랭크 프롬프트** — 지금은 title·summary만 넣는다. PRD §03은 트러블슈팅 리랭크를 "증상·근본원인·
   해결책 적용 가능성" 기준으로 요구하므로, 리랭크 후보 요약도 유형 전략에 위임할 여지가 있다.
 - **다차원 분류(C)** — 지금은 domain 축 1개(유형)만. `route`·`novelty`·`ts_subtype`·`entities`·

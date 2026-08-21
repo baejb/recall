@@ -1,6 +1,7 @@
 package com.recall.memory;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.BadRequestException;
 import com.recall.common.CurrentUserProvider;
@@ -86,7 +87,7 @@ public class MemoryService {
 
         boolean hasMore = rows.size() > size;
         List<Memory> page = hasMore ? rows.subList(0, size) : rows;
-        List<MemoryResponse> items = page.stream().map(MemoryService::toResponse).toList();
+        List<MemoryResponse> items = page.stream().map(this::toResponse).toList();
 
         String nextCursor = null;
         if (hasMore) {
@@ -219,14 +220,31 @@ public class MemoryService {
         return List.of();
     }
 
-    private static MemoryResponse toResponse(Memory m) {
+    private MemoryResponse toResponse(Memory m) {
         return new MemoryResponse(
                 m.getId(),
                 m.getCapture().getId(),
                 m.getType().name(),
                 m.getTitle(),
                 m.getSummary(),
+                cardStatus(m),
                 m.getStatus(),
                 m.getCreatedAt());
+    }
+
+    /**
+     * 카드 내용의 상태(트러블슈팅 해결 여부). {@code structured}의 {@code "status"}를 그대로 읽는다 — 유형별 필드 이름을 공유 코드에
+     * 늘어놓지 않고, title·summary·keywords 처럼 <b>유형이 두면 쓰이는 공통 선택 필드</b>로 다룬다. 그 필드가 없는 유형(지식)은 null.
+     *
+     * <p>파싱 실패는 목록 조회를 막지 않고 배지만 생략한다(로그로 드러냄 — 조용한 실패 금지).
+     */
+    private String cardStatus(Memory m) {
+        try {
+            JsonNode node = objectMapper.readTree(m.getStructured()).get("status");
+            return node == null || node.isNull() ? null : node.asText();
+        } catch (Exception e) {
+            log.warn("카드 상태 생략(structured 파싱 실패) memoryId={}: {}", m.getId(), e.getMessage());
+            return null;
+        }
     }
 }

@@ -4,7 +4,8 @@ import type { Memory, QueryScope, ReviewCard } from '../types'
 
 /** 메모리의 대표 요약 문장(유형별). */
 export function memSummary(m: Memory): string {
-  return m.type === 'ts' ? m.ts.solution || m.ts.problem : m.kn.content
+  if (m.type !== 'ts') return m.kn.content
+  return m.ts.finalSolution || m.ts.summary || m.ts.symptom
 }
 
 /** 매칭 근거: 질문에 키워드가 직접 들어있으면 '단어 일치', 아니면 '의미 유사'. */
@@ -58,7 +59,9 @@ export function findSimilarMemory(memories: Memory[], card: ReviewCard): Memory 
   const text = (
     (card.title || '') +
     ' ' +
-    (card.ts?.problem || '') +
+    (card.ts?.symptom || '') +
+    ' ' +
+    (card.ts?.errorSignature || '') +
     ' ' +
     (card.kn?.content || '')
   ).toLowerCase()

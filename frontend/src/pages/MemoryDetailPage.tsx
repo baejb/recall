@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getMemoryDetail, updateMemoryStatus, type MemoryStatus } from '../api/client'
-import { toTypeKey } from '../api/adapter'
+import { readTroubleshootingCard, toTsFields, toTypeKey } from '../api/adapter'
 import type { MemoryDetailResponse } from '../api/dto'
 import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
+import { TroubleshootingCardView } from '../components/TroubleshootingCardView'
 import { CaptureRawView } from '../components/CaptureRawView'
 
 const STATUS_TOAST: Record<MemoryStatus, string> = {
@@ -123,7 +124,8 @@ export function MemoryDetailPage() {
   }
 
   const d = state.detail
-  const meta = TYPE_META[toTypeKey(d.type)]
+  const typeKey = toTypeKey(d.type)
+  const meta = TYPE_META[typeKey]
 
   return (
     <section className="screen">
@@ -148,12 +150,17 @@ export function MemoryDetailPage() {
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <KnowledgeCardView
-            summary={d.summary}
-            facts={d.facts}
-            keywords={d.keywords}
-            document={d.document}
-          />
+          {typeKey === 'ts' ? (
+            // 유형별 필드는 structured(카드 전체)에서 읽는다 — 평면 필드는 knowledge 레거시.
+            <TroubleshootingCardView fields={toTsFields(readTroubleshootingCard(d.structured))} />
+          ) : (
+            <KnowledgeCardView
+              summary={d.summary}
+              facts={d.facts}
+              keywords={d.keywords}
+              document={d.document}
+            />
+          )}
         </div>
 
         <CaptureRawView key={d.captureId} captureId={d.captureId} />

@@ -23,11 +23,26 @@ export interface Capture {
   created: string
 }
 
-/** 트러블슈팅 유형 필드. */
+/** 한 번의 시도와 그 결말. outcome 은 백엔드 카드 값(failed·partial·worked, 판단 불가는 unknown). */
+export interface TsAttempt {
+  action: string
+  result: string
+  outcome: 'failed' | 'partial' | 'worked' | 'unknown'
+}
+
+/**
+ * 트러블슈팅 유형 필드 — 백엔드 TroubleshootingCard 스키마를 미러링한다(PRD §04).
+ * 실패한 시도까지 보존하는 게 이 카드의 핵심 가치라 attempts 를 통째로 들고 있는다.
+ */
 export interface TsFields {
-  problem: string
-  tried: string
-  solution: string
+  summary: string
+  symptom: string
+  errorMessage: string
+  errorSignature: string
+  environment: string
+  attempts: TsAttempt[]
+  rootCause: string
+  finalSolution: string
   status: TsStatus
 }
 

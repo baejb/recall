@@ -17,5 +17,6 @@ Decision Log에도 요약한다.
 | # | 슬라이스 | 문서 | 상태 |
 |---|----------|------|------|
 | 1 | 유형 전략 SPI 5종 + 저장 경로 유형 라우팅 | [troubleshooting-01-type.md](troubleshooting-01-type.md) | 완료(백엔드) |
+| 2 | 프론트 TS 카드 렌더 + 목록 해결상태 | [troubleshooting-02-frontend.md](troubleshooting-02-frontend.md) | 완료 |
 
 > 공유 파이프라인·SPI 계약의 큰 그림은 `docs/architecture.md`, 기능 근거는 `docs/recall_ai_prd.md`.
