@@ -12,4 +12,10 @@ Decision Log에도 요약한다.
 | 2 | 검색 — Voyage 임베딩 + vector·BM25 하이브리드(RRF) | [knowledge-02-search.md](knowledge-02-search.md) | 완료 |
 | 3 | S4 판정 — 유사 후보 대조(재발/보완/충돌) | [knowledge-03-s4-judgement.md](knowledge-03-s4-judgement.md) | 완료 |
 
+## Phase 2 — troubleshooting 유형
+
+| # | 슬라이스 | 문서 | 상태 |
+|---|----------|------|------|
+| 1 | 유형 전략 SPI 5종 + 저장 경로 유형 라우팅 | [troubleshooting-01-type.md](troubleshooting-01-type.md) | 완료(백엔드) |
+
 > 공유 파이프라인·SPI 계약의 큰 그림은 `docs/architecture.md`, 기능 근거는 `docs/recall_ai_prd.md`.

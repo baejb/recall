@@ -19,6 +19,7 @@ import com.recall.memory.MemoryRepository;
 import com.recall.memory.MemorySearchStore;
 import com.recall.memory.ScoredMemory;
 import com.recall.memory.type.SearchRepresentation;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,8 +53,55 @@ class SimilarMemoryFinderTest {
                 }
             };
 
+    /** document kind가 없는 유형(트러블슈팅=problem·solution 이중 벡터)의 검색 표현. kind 순서가 대표 텍스트를 정한다. */
+    private static final SearchRepresentation TROUBLESHOOTING_REP =
+            new SearchRepresentation() {
+                @Override
+                public MemoryType supports() {
+                    return MemoryType.TROUBLESHOOTING;
+                }
+
+                @Override
+                public Map<String, String> embeddingTexts(Map<String, Object> structured) {
+                    Map<String, String> texts = new LinkedHashMap<>();
+                    texts.put("problem", String.valueOf(structured.get("symptom")));
+                    texts.put("solution", String.valueOf(structured.get("final_solution")));
+                    return texts;
+                }
+            };
+
     private static UserAiContext embeddingCtx(EmbeddingClient embeddingClient) {
         return new UserAiContext(CALLER_USER_ID, null, embeddingClient, true, true);
+    }
+
+    @Test
+    @DisplayName("document kind가 없는 유형은 첫 kind(problem)를 대표 텍스트로 쓴다 — title 폴백으로 떨어지지 않는다")
+    void usesFirstKindWhenTypeHasNoDocument() {
+        EmbeddingClient embeddingClient = mock(EmbeddingClient.class);
+        when(embeddingClient.embedDocument(anyString())).thenReturn(new float[1024]);
+
+        MemorySearchStore searchStore = mock(MemorySearchStore.class);
+        when(searchStore.searchByVector(
+                        eq(CALLER_USER_ID), any(), eq(MemoryType.TROUBLESHOOTING), anyInt()))
+                .thenReturn(List.of());
+        when(searchStore.searchByKeyword(
+                        eq(CALLER_USER_ID), anyString(), eq(MemoryType.TROUBLESHOOTING), anyInt()))
+                .thenReturn(List.of());
+
+        SimilarMemoryFinder finder =
+                new SimilarMemoryFinder(
+                        searchStore,
+                        mock(MemoryRepository.class),
+                        List.of(KNOWLEDGE_REP, TROUBLESHOOTING_REP));
+
+        finder.findSimilar(
+                CALLER_USER_ID,
+                Map.of("title", "제목", "symptom", "컨테이너가 죽는다", "final_solution", "한도 상향"),
+                MemoryType.TROUBLESHOOTING,
+                embeddingCtx(embeddingClient));
+
+        // 증상(problem)으로 유사 후보를 찾아야 한다 — 같은 문제인지가 판정의 출발점이기 때문.
+        verify(embeddingClient).embedDocument("컨테이너가 죽는다");
     }
 
     @Test

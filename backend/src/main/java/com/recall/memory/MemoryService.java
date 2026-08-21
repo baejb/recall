@@ -188,6 +188,9 @@ public class MemoryService {
                 stringList(structured, "keywords"),
                 stringList(structured, "facts"),
                 stringField(structured, "document"),
+                // 유형별 필드(트러블슈팅 symptom·attempts·root_cause 등)는 카드 전체를 그대로 실어 보낸다 —
+                // 유형이 늘 때마다 DTO를 고치지 않기 위해(위 3개는 knowledge 레거시 평면 필드).
+                structured,
                 memory.getStatus(),
                 memory.getCreatedAt());
     }

@@ -177,10 +177,7 @@ public class QueryPipeline {
     public void composeStreaming(
             String question, List<Memory> candidates, Consumer<String> onToken, UserAiContext ctx) {
         ctx.requireChat()
-                .completeStream(
-                        ANSWER_SYSTEM,
-                        buildEvidencePrompt(question, candidates, objectMapper),
-                        onToken);
+                .completeStream(ANSWER_SYSTEM, buildEvidencePrompt(question, candidates), onToken);
     }
 
     /** 격하(호출 실패): 각 근거를 유형별 전략으로 렌더(요약)해 근거(memory id)와 함께 조각으로 낸다 — 나열이지만 근거에 매여 있다. */
@@ -237,32 +234,20 @@ public class QueryPipeline {
         return sb.toString();
     }
 
-    /** 질문 + 번호 매긴 근거(제목·요약·사실)로 LLM 사용자 프롬프트를 만든다. 근거 콘텐츠는 마스킹된 원문에서 추출된 것이다. */
-    static String buildEvidencePrompt(
-            String question, List<Memory> candidates, ObjectMapper mapper) {
+    /**
+     * 질문 + 번호 매긴 근거로 A(답변) 사용자 프롬프트를 만든다. 근거 콘텐츠는 마스킹된 원문에서 추출된 것이다.
+     *
+     * <p>각 근거의 <b>내용은 유형별 전략</b>({@link AnswerContribution#render})이 만든다 — 유형마다 어떤 필드가 근거인지 다르기
+     * 때문이다(지식=사실, 트러블슈팅=증상·시도·원인·해결). 공유 코드는 질문·번호·순서만 담당한다(architecture.md 가드레일 2: 유형별 필드를
+     * 공유 코드에 하드코딩하지 않는다).
+     */
+    String buildEvidencePrompt(String question, List<Memory> candidates) {
         StringBuilder sb = new StringBuilder();
         sb.append("질문: ").append(question).append("\n\n근거:\n");
         int n = 1;
         for (Memory m : candidates) {
-            Map<String, Object> s = parseWith(mapper, m.getStructured());
             sb.append('[').append(n++).append("] ");
-            Object title = s.get("title");
-            if (title != null) {
-                sb.append(title).append(" — ");
-            }
-            Object summary = s.get("summary");
-            if (summary != null) {
-                sb.append(summary);
-            }
-            if (s.get("facts") instanceof List<?> facts && !facts.isEmpty()) {
-                sb.append("\n    사실: ");
-                for (int i = 0; i < facts.size(); i++) {
-                    if (i > 0) {
-                        sb.append("; ");
-                    }
-                    sb.append(String.valueOf(facts.get(i)));
-                }
-            }
+            sb.append(answers.get(m.getType()).render(parse(m.getStructured())));
             sb.append('\n');
         }
         return sb.toString();

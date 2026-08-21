@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.common.AiNotConfiguredException;
 import com.recall.common.MemoryType;
 import com.recall.llm.EmbeddingClient;
@@ -13,6 +12,7 @@ import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.Memory;
 import com.recall.memory.type.AnswerContribution;
+import com.recall.memory.type.knowledge.KnowledgeAnswer;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +20,6 @@ import org.junit.jupiter.api.Test;
 
 /** A 그라운딩 프롬프트 + RR(리랭크)/C(분류) 파싱·재정렬·격하의 결정론 검증(순수 로직 — DB·실LLM 불필요). */
 class QueryPipelineTest {
-
-    private final ObjectMapper mapper = new ObjectMapper();
 
     /** rerank/classify는 searchService를 쓰지 않으므로 null로 둔다(생성만; 호출 안 함). */
     private static QueryPipeline pipelineWith(List<AnswerContribution> answers) {
@@ -67,7 +65,7 @@ class QueryPipelineTest {
     // ── A 그라운딩 프롬프트 ──────────────────────────────────
 
     @Test
-    @DisplayName("A 프롬프트에 질문 + 번호 매긴 근거의 제목·요약·사실이 담긴다")
+    @DisplayName("A 프롬프트에 질문 + 번호 매긴 근거(유형 전략이 렌더한 제목·요약·사실)가 담긴다")
     void evidencePromptCarriesQuestionAndEvidence() {
         Memory m =
                 Memory.transientCard(
@@ -76,7 +74,9 @@ class QueryPipelineTest {
                         "{\"title\":\"게이트웨이 분리\",\"summary\":\"토폴로지 분리는 끝났다\","
                                 + "\"facts\":[\"별도 배포 단위\",\"REST·Kafka로만 연결\"]}");
 
-        String prompt = QueryPipeline.buildEvidencePrompt("남은 과제가 뭐였지?", List.of(m), mapper);
+        String prompt =
+                pipelineWith(List.of(new KnowledgeAnswer()))
+                        .buildEvidencePrompt("남은 과제가 뭐였지?", List.of(m));
 
         assertTrue(prompt.contains("남은 과제가 뭐였지?"), "질문 포함");
         assertTrue(prompt.contains("[1]"), "근거 번호");

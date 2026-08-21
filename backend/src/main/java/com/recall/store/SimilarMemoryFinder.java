@@ -74,11 +74,28 @@ public class SimilarMemoryFinder {
                 .flatMap(id -> memoryRepository.findByIdAndUserId(id, userId));
     }
 
-    /** 유사 판정에 쓸 대표 텍스트 — 유형별 검색 표현의 document(비면 title). */
+    /**
+     * 유사 판정에 쓸 대표 텍스트 — 유형별 검색 표현이 내는 kind 중 하나를 고른다.
+     *
+     * <p>유형마다 대표 kind가 다르다: 지식은 {@code document}("문서 vs 문서" 대조), 트러블슈팅은 {@code problem}(같은 문제인지를
+     * 증상·에러 시그니처로 먼저 본다 — 해결책이 달라도 같은 문제일 수 있으므로). 그래서 {@code document}가 있으면 그것을, 없으면 <b>첫
+     * kind</b>를 쓴다(kind 순서는 유형 전략이 정한다 — 공유 코드가 유형을 알지 않게).
+     *
+     * <p>임베딩 대상 kind가 하나도 없으면 title로 폴백한다(후보를 아예 못 찾는 것보다 낫다).
+     */
     private String representativeText(Map<String, Object> structured, MemoryType type) {
-        String document = searchReps.get(type).embeddingTexts(structured).get("document");
+        Map<String, String> texts = searchReps.get(type).embeddingTexts(structured);
+        String document = texts.get("document");
         if (document != null && !document.isBlank()) {
             return document;
+        }
+        String firstKind =
+                texts.values().stream()
+                        .filter(text -> text != null && !text.isBlank())
+                        .findFirst()
+                        .orElse("");
+        if (!firstKind.isBlank()) {
+            return firstKind;
         }
         Object title = structured.get("title");
         return title == null ? "" : title.toString().strip();

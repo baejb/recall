@@ -41,6 +41,7 @@ public class StorePipeline {
     private final ReviewRepository reviewRepository;
     private final SimilarMemoryFinder similarMemoryFinder;
     private final LongContextExtractor longContextExtractor;
+    private final TypeClassifier typeClassifier;
     private final AiContextFactory contextFactory;
     private final StrategyRegistry<SimilarityJudgeStrategy> judges;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -50,12 +51,14 @@ public class StorePipeline {
             ReviewRepository reviewRepository,
             SimilarMemoryFinder similarMemoryFinder,
             LongContextExtractor longContextExtractor,
+            TypeClassifier typeClassifier,
             AiContextFactory contextFactory,
             List<SimilarityJudgeStrategy> judgeStrategies) {
         this.captureRepository = captureRepository;
         this.reviewRepository = reviewRepository;
         this.similarMemoryFinder = similarMemoryFinder;
         this.longContextExtractor = longContextExtractor;
+        this.typeClassifier = typeClassifier;
         this.contextFactory = contextFactory;
         this.judges = new StrategyRegistry<>(judgeStrategies);
     }
@@ -90,7 +93,9 @@ public class StorePipeline {
             }
 
             stage = "classify";
-            MemoryType type = classify(event.maskedText());
+            // 유형 라우팅(🔵) — 등록된 추출 전략의 유형 중에서만 고르고, 실패·모르는 출력은 기본 유형으로 격하한다.
+            // 유형을 잘못 골라도 원문은 capture에 남고, 잘못된 카드는 검토에서 반려할 수 있다(승인 게이트).
+            MemoryType type = typeClassifier.classify(event.maskedText(), ctx);
 
             stage = "extract";
             // S2/S3 — 짧으면 단일 패스, 길면 긴맥락 Map-Reduce(청킹→조각추출→병합). LLM 은 ctx 에 바인딩된
@@ -140,11 +145,6 @@ public class StorePipeline {
             captureRepository.markFailed(event.captureId(), stage);
             // 이미 FAILED 로 durable 하게 드러났으므로 재던지지 않는다.
         }
-    }
-
-    private MemoryType classify(String maskedText) {
-        // TODO(Phase 1): 다차원 분류(C)로 유형 판정. 지금은 기본 KNOWLEDGE.
-        return MemoryType.KNOWLEDGE;
     }
 
     private String toJson(Map<String, Object> map) {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.recall.common.LlmJson;
 import com.recall.common.MemoryType;
 import com.recall.common.PromptLoader;
 import com.recall.llm.LlmClient;
@@ -66,7 +67,7 @@ public class KnowledgeExtraction implements ExtractionStrategy {
             return fallback(maskedText);
         }
 
-        String json = extractJsonObject(raw);
+        String json = LlmJson.extractObject(raw);
         if (json == null) {
             log.warn("LLM 응답에서 JSON을 찾지 못함 → fallback (응답: {})", preview(raw));
             return fallback(maskedText);
@@ -90,16 +91,6 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     private KnowledgeCard withTitle(KnowledgeCard card, String title) {
         return new KnowledgeCard(
                 title, card.summary(), card.keywords(), card.facts(), card.document());
-    }
-
-    /** 응답 텍스트에서 첫 '{'~마지막 '}' 구간만 잘라 JSON 본문 후보를 얻는다(모델이 산문/마크다운으로 감싸도 견딤). */
-    private String extractJsonObject(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        int start = raw.indexOf('{');
-        int end = raw.lastIndexOf('}');
-        return (start >= 0 && end > start) ? raw.substring(start, end + 1) : null;
     }
 
     private String deriveTitle(String maskedText) {

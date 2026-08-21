@@ -59,6 +59,10 @@ Recall 저장소에서 Claude Code / 팀원이 **가장 먼저 읽는 가이드*
 | 9 | 2026-08-10 | search | RRF 융합 K=60, knowledge 채널 가중치 vector 2.0 / bm25 1.0 | 결정론 융합(LLM 금지). 지식은 vector 중심·bm25 보조(PRD). 라벨셋 fit 튜닝 대상 | active |
 | 10 | 2026-08-11 | search | BM25 질의 = lexeme OR 결합(plainto_tsquery AND 아님) | 한국어 형태소 사전 없어 조사 차이로 AND 매칭 실패 | active |
 | 11 | 2026-08-11 | store | S4 유사 임계 τ_sim=0.75, 판정 불확실 fallback = SUPPLEMENT | 후보는 있으니 NEW 아님, CONFLICT는 과함(자동 덮어쓰기 금지) → 사람 검토 유도 (→ `docs/design/knowledge-03-s4-judgement.md`) | active |
+| 12 | 2026-08-21 | store | troubleshooting 카드 JSON = PRD snake_case 키, `attempts[]`는 `{action, result, outcome}` 객체 배열 | 저장된 structured JSON은 사실상 되돌리기 어렵다(기존 카드 마이그레이션 필요). 조치·결과 분리는 "뭘 시도했었지" 회상의 전제, `outcome`은 실패 시도 보존(🟠)의 기계 채점용 (→ `docs/design/troubleshooting-01-type.md`) | active |
+| 13 | 2026-08-21 | store | troubleshooting `status` 모르는 값 → `UNRESOLVED`, `outcome` 모르는 값 → `unknown` | 해결됐다고 잘못 단정하는 쪽이 반대보다 위험(근거 없는 생성 금지의 연장). 실패로 위장하지도 않는다 | active |
+| 14 | 2026-08-21 | search | troubleshooting 임베딩 kind = problem·solution 2개(PRD 이중 벡터), 채널 가중치 bm25 2.0 / vector 1.2 | attempts 3번째 kind는 임베딩 비용 1.5배 + PRD 이탈로 기각. 에러 코드·예외명은 정확 토큰 매칭이 벡터보다 강함(PRD §04). 라벨셋 fit 튜닝 대상 | active |
+| 15 | 2026-08-21 | store | 저장 경로 유형 라우팅은 원문 앞 4,000자만 LLM에 넣는다 | 유형은 도입부에서 드러남 · 긴 붙여넣기 토큰 폭발 방지. 추출(S2/S3)은 전문을 겹침 청킹으로 커버하므로 내용 유실 아님(절단은 로그로 노출) | active |
 
 ## 4. 개인용 설정 (`templates/`)
 
