@@ -1,6 +1,6 @@
 package com.recall.llm;
 
-import com.recall.settings.SettingsService;
+import com.recall.settings.service.SettingsService;
 
 /**
  * 소비자에 주입되던 임베딩 프록시(매 호출 현재 설정으로 팩토리에서 클라이언트를 얻어 위임).

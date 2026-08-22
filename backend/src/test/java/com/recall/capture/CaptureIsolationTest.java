@@ -5,9 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.recall.capture.dto.CaptureStatusResponse;
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.NotFoundException;
+import com.recall.capture.controller.dto.CaptureStatusResponse;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.CaptureService;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.NotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;

@@ -7,14 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.recall.capture.Capture;
-import com.recall.capture.CaptureRepository;
-import com.recall.common.BadRequestException;
-import com.recall.common.MemoryType;
-import com.recall.common.NotFoundException;
-import com.recall.memory.dto.MemoryDetailResponse;
-import com.recall.memory.dto.MemoryPageResponse;
-import com.recall.memory.dto.MemoryResponse;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.exception.NotFoundException;
+import com.recall.common.exception.ValidationException;
+import com.recall.common.type.MemoryType;
+import com.recall.memory.controller.dto.MemoryDetailResponse;
+import com.recall.memory.controller.dto.MemoryPageResponse;
+import com.recall.memory.controller.dto.MemoryResponse;
+import com.recall.memory.repository.MemoryRepository;
+import com.recall.memory.service.MemoryService;
+import com.recall.memory.service.entity.Memory;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -143,10 +146,10 @@ class MemoryListPaginationTest {
     @DisplayName("잘못된 커서·유형은 400")
     void rejectsBadCursorAndType() {
         assertThrows(
-                BadRequestException.class,
+                ValidationException.class,
                 () -> memoryService.list(null, null, "!!!broken!!!", 20));
 
-        assertThrows(BadRequestException.class, () -> memoryService.list(null, "nope", null, 20));
+        assertThrows(ValidationException.class, () -> memoryService.list(null, "nope", null, 20));
     }
 
     @Test
@@ -183,8 +186,8 @@ class MemoryListPaginationTest {
         assertFalse(ids(memoryService.list(TOK, null, null, 50)).contains(id));
         assertTrue(ids(memoryService.list(TOK, null, null, 50, "incorrect")).contains(id));
 
-        // 잘못된 status → 400(BadRequestException)
-        assertThrows(BadRequestException.class, () -> memoryService.updateStatus(id, "deleted"));
+        // 잘못된 status → 400(ValidationException)
+        assertThrows(ValidationException.class, () -> memoryService.updateStatus(id, "deleted"));
 
         // 없는 id → 404(NotFoundException)
         assertThrows(

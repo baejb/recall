@@ -9,13 +9,15 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
-import com.recall.review.ReviewItem;
-import com.recall.review.ReviewRepository;
-import com.recall.store.SimilarMemoryFinder;
+import com.recall.review.repository.ReviewRepository;
+import com.recall.review.service.entity.ReviewItem;
+import com.recall.store.service.SimilarMemoryFinder;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -119,6 +121,8 @@ class CaptureFailureExposureTest {
     private Long extractCaptureId(String response) throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper()
                 .readTree(response)
+                // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                .path("data")
                 .path("captureId")
                 .asLong();
     }

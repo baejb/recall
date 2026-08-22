@@ -1,6 +1,6 @@
 package com.recall.llm;
 
-import com.recall.settings.SettingsService;
+import com.recall.settings.service.SettingsService;
 import org.springframework.stereotype.Component;
 
 /**

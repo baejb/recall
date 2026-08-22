@@ -9,13 +9,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.recall.common.MemoryType;
+import com.recall.common.type.MemoryType;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.MemoryRepository;
-import com.recall.memory.MemorySearchStore;
+import com.recall.memory.repository.MemoryRepository;
+import com.recall.memory.repository.MemorySearchStore;
 import com.recall.memory.type.PlanContribution;
-import com.recall.settings.SettingsService;
+import com.recall.memory.type.SearchChannel;
+import com.recall.search.service.HybridSearchService;
+import com.recall.settings.service.SettingsService;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +37,11 @@ class HybridSearchDegradeTest {
 
     private HybridSearchService newService() {
         when(plan.supports()).thenReturn(MemoryType.KNOWLEDGE);
-        when(plan.channelWeights()).thenReturn(Map.of("memory_vector", 1.0, "memory_bm25", 1.0));
+        when(plan.channelWeights())
+                .thenReturn(
+                        Map.of(
+                                SearchChannel.MEMORY_VECTOR, 1.0,
+                                SearchChannel.MEMORY_BM25, 1.0));
         return new HybridSearchService(store, memoryRepository, List.of(plan), settings);
     }
 

@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -48,7 +50,9 @@ class CaptureRawFlowTest {
                             String json = result.getResponse().getContentAsString();
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
-                                            .readTree(json);
+                                            .readTree(json)
+                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            .path("data");
                             assertEquals(capture.getId(), node.get("id").asLong());
                             assertEquals("chat", node.get("sourceType").asText());
                             assertEquals("마스킹된 원문 [REDACTED]", node.get("rawText").asText());
@@ -79,7 +83,9 @@ class CaptureRawFlowTest {
                             String json = result.getResponse().getContentAsString();
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
-                                            .readTree(json);
+                                            .readTree(json)
+                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            .path("data");
                             assertEquals(capture.getId(), node.get("id").asLong());
                         });
     }
