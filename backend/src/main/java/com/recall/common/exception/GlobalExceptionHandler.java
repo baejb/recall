@@ -25,12 +25,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
- * 예외 → 공통 응답 봉투({@link ApiResponse#fail}) <b>단일 변환 지점</b>. 컨트롤러마다 try-catch 를 흩뿌리지 않는다.
+ * 예외 → 공통 응답 형식({@link ApiResponse#fail}) <b>단일 변환 지점</b>. 컨트롤러마다 try-catch 를 흩뿌리지 않는다.
  *
  * <p>상태 코드는 예외 타입이 아니라 {@link ErrorCode}에서 나온다 — 코드와 상태가 어긋나지 않는다.
  *
- * <p>모든 봉투는 {@code traceId}와 함께 서버 로그에 남긴다 — 사용자가 보고한 traceId 를 로그 라인과 상관시킬 수 있어야 한다. 추적할 수 없는 식별자는
- * 있으나 마나다.
+ * <p>모든 에러 응답은 {@code traceId}와 함께 서버 로그에 남긴다 — 사용자가 보고한 traceId 를 로그 라인과 상관시킬 수 있어야 한다. 추적할 수 없는
+ * 식별자는 있으나 마나다.
  *
  * <p><b>catch-all 이 삼키던 것들을 개별 핸들러로 끌어냈다</b>(조용한 실패 금지): 타입 불일치·매핑 없는 경로·읽을 수 없는 본문·미지원 메서드는 모두
  * 호출자가 고칠 수 있는 4xx 인데, 핸들러가 없으면 맨 아래 {@code Exception} 핸들러가 붙잡아 <b>500</b>으로 나간다. 그러면 "서버가 고장났다"는
@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    /** 도메인·애플리케이션 예외 — 예외가 지닌 ErrorCode 를 그대로 봉투에 싣는다. */
+    /** 도메인·애플리케이션 예외 — 예외가 지닌 ErrorCode 를 그대로 에러 응답에 싣는다. */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse<Void>> handleApi(ApiException e) {
         return respond(e.code(), e.getMessage(), e.field());
@@ -101,7 +101,7 @@ public class GlobalExceptionHandler {
     /**
      * 매핑되지 않은 경로 — 404.
      *
-     * <p>없는 경로와 없는 리소스는 호출자에게 같은 사실이므로 같은 봉투로 답한다. 이 핸들러가 없으면 오타 난 URL 이 500 으로 나간다.
+     * <p>없는 경로와 없는 리소스는 호출자에게 같은 사실이므로 같은 형식으로 답한다. 이 핸들러가 없으면 오타 난 URL 이 500 으로 나간다.
      */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
@@ -114,7 +114,7 @@ public class GlobalExceptionHandler {
      * 지원하지 않는 HTTP 메서드 — 405. 라우트는 있으나 그 동작이 없다는 사실을 그대로 알린다.
      *
      * <p>상태를 손으로 지정하지 않고 {@code respond()} 를 쓴다 — 전에는 `VALIDATION_ERROR`(선언 상태 400)를 실은 채 405 로 응답해
-     * 코드와 상태가 어긋난 봉투가 나갔고, 그건 이 클래스가 지킨다고 적어 둔 계약을 스스로 깬 것이었다.
+     * 코드와 상태가 어긋난 응답이 나갔고, 그건 이 클래스가 지킨다고 적어 둔 계약을 스스로 깬 것이었다.
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
@@ -161,7 +161,7 @@ public class GlobalExceptionHandler {
      * catch-all 이 붙잡아 예측 가능한 운영 상황(근거가 많거나 provider 가 느려 스트리밍이 60초를 넘김)이 "분류되지 않은 예외" ERROR 스택으로
      * 기록되고, 실제 결함이 그 소음에 묻힌다.
      *
-     * <p>이 예외는 <b>대개 응답이 이미 시작된 뒤</b>에 온다(SSE 는 200 과 첫 조각을 먼저 보낸다). 그때 봉투를 쓰지 않는 처리는 {@link
+     * <p>이 예외는 <b>대개 응답이 이미 시작된 뒤</b>에 온다(SSE 는 200 과 첫 조각을 먼저 보낸다). 그때 응답을 쓰지 않는 처리는 {@link
      * #envelope} 이 공통으로 담당한다 — 커밋 검사를 핸들러마다 손으로 넣으면 새 핸들러에서 빠뜨린다. 여기서는 <b>아직 아무것도 안 보낸</b> 타임아웃(근거
      * 검색 단계에서 초과)에 503 을 실어 주는 것이 역할이다.
      */
@@ -188,7 +188,7 @@ public class GlobalExceptionHandler {
             ErrorCode code, String message, String field) {
         ApiError error = ApiError.of(code, message, field);
         log.warn(
-                "에러 봉투 {} {} field={} traceId={}",
+                "에러 응답 {} {} field={} traceId={}",
                 code.status().value(),
                 error.code(),
                 error.field(),
@@ -198,29 +198,29 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 에러 봉투를 <b>Accept 헤더와 무관하게</b> JSON 으로 응답한다.
+     * 에러 응답을 <b>Accept 헤더와 무관하게</b> JSON 으로 응답한다.
      *
-     * <p><b>왜 Content-Type 을 못 박는가</b> — 봉투를 그냥 반환하면 스프링이 요청의 Accept 와 컨텐츠 협상을 하고, 협상이 실패하면 {@code
-     * HttpMediaTypeNotAcceptableException} 이 <b>핸들러 안에서</b> 터진다. 그 예외는 이 클래스가 다시 잡을 수 없어(이미 예외 처리
-     * 중) 원 예외가 그대로 재전파되고, 클라이언트는 <b>500 + 빈 본문</b>을 받는다.
+     * <p><b>왜 Content-Type 을 못 박는가</b> — 응답 객체를 그냥 반환하면 스프링이 요청의 Accept 와 컨텐츠 협상을 하고, 협상이 실패하면
+     * {@code HttpMediaTypeNotAcceptableException} 이 <b>핸들러 안에서</b> 터진다. 그 예외는 이 클래스가 다시 잡을 수 없어(이미
+     * 예외 처리 중) 원 예외가 그대로 재전파되고, 클라이언트는 <b>500 + 빈 본문</b>을 받는다.
      *
      * <p>실제로 그렇게 됐다: SSE 소비자({@code POST /api/query})는 {@code Accept: text/event-stream} 만 보내므로
-     * JSON 봉투와 협상이 안 됐고, chat 미설정(409 {@code AI_NOT_CONFIGURED})·본문 검증 실패(400)가 모두 <b>빈 본문</b>으로
+     * JSON 응답과 협상이 안 됐고, chat 미설정(409 {@code AI_NOT_CONFIGURED})·본문 검증 실패(400)가 모두 <b>빈 본문</b>으로
      * 나갔다. 구 핸들러는 {@code ProblemDetail} 을 썼는데 그건 프레임워크가 Accept 불일치에도 problem 미디어타입으로 기록해 주는 폴백이
-     * 있었고, 봉투로 바꾸면서 그 폴백이 사라진 것이다.
+     * 있었고, 공통 형식으로 바꾸면서 그 폴백이 사라진 것이다.
      *
      * <p>에러 응답은 <b>협상 대상이 아니다</b>: 요청이 무엇을 받겠다고 했든 실패 사실은 전달돼야 한다. 그래서 여기서 형식을 고정한다 — 클라이언트가 Accept
-     * 를 어떻게 보내든 봉투가 도착하는 것이 이 클래스가 지켜야 할 계약이다.
+     * 를 어떻게 보내든 에러 응답이 도착하는 것이 이 클래스가 지켜야 할 계약이다.
      *
      * <p><b>단, 응답이 이미 커밋됐으면 아무것도 쓰지 않는다</b> — {@link #alreadyCommitted()} 참조. 이 검사를 개별 핸들러가 아니라 여기
      * 두는 이유: 규칙("커밋됐으면 쓰지 않는다")은 조건 없는 규칙인데 핸들러마다 손으로 지키면 <b>새 핸들러가 추가될 때마다 빠뜨릴 수 있다</b>. 실제로 타임아웃
-     * 핸들러에만 검사가 있고 catch-all 에는 없어서, 스트리밍 중 터진 비-타임아웃 예외가 커밋된 응답에 500 봉투를 쓰려 했다. 모든 봉투가 이 한 통로를
-     * 지나므로 여기서 막으면 규칙이 <b>구조적으로</b> 성립한다.
+     * 핸들러에만 검사가 있고 catch-all 에는 없어서, 스트리밍 중 터진 비-타임아웃 예외가 이미 커밋된 응답에 500 본문을 쓰려 했다. 모든 에러 응답이 이 한
+     * 통로를 지나므로 여기서 막으면 규칙이 <b>구조적으로</b> 성립한다.
      */
     private static ResponseEntity<ApiResponse<Void>> envelope(HttpStatus status, ApiError error) {
         if (alreadyCommitted()) {
             log.warn(
-                    "응답이 이미 커밋돼 에러 봉투를 쓰지 않는다 — {} {} traceId={}",
+                    "응답이 이미 커밋돼 에러 응답을 쓰지 않는다 — {} {} traceId={}",
                     status.value(),
                     error.code(),
                     error.traceId());
@@ -235,8 +235,8 @@ public class GlobalExceptionHandler {
      * 응답의 첫 바이트가 이미 나갔는가.
      *
      * <p>SSE 는 200 과 첫 조각을 보낸 뒤에도 예외가 날 수 있다({@code AnswerStreamer} 가 근거 전송 중 실패하면 {@code
-     * completeWithError} 로 넘긴다). 그 시점엔 상태·헤더·본문을 더 쓸 수 없어서 봉투를 쓰려는 시도 자체가 다시 실패하고, 로그에는 원래 실패 위에
-     * "봉투 쓰기 실패"가 겹쳐 원인을 가린다. {@code null} 을 반환하면 스프링은 "처리했고 쓸 것은 없다"로 받아들인다(삼키는 게 아니라 응답 통로가 닫힌
+     * completeWithError} 로 넘긴다). 그 시점엔 상태·헤더·본문을 더 쓸 수 없어서 응답을 쓰려는 시도 자체가 다시 실패하고, 로그에는 원래 실패 위에
+     * "응답 쓰기 실패"가 겹쳐 원인을 가린다. {@code null} 을 반환하면 스프링은 "처리했고 쓸 것은 없다"로 받아들인다(삼키는 게 아니라 응답 통로가 닫힌
      * 것이며, 사실은 위에서 로그로 남긴다).
      *
      * <p>응답 객체를 핸들러 파라미터로 받지 않고 {@link RequestContextHolder} 에서 꺼내는 이유: 그래야 <b>모든</b> 핸들러가 시그니처를

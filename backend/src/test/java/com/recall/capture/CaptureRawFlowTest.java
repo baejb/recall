@@ -51,7 +51,7 @@ class CaptureRawFlowTest {
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
                                             .readTree(json)
-                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            // 공통 응답 형식 — 성공 본문은 data 안에 있다.
                                             .path("data");
                             assertEquals(capture.getId(), node.get("id").asLong());
                             assertEquals("chat", node.get("sourceType").asText());
@@ -84,7 +84,7 @@ class CaptureRawFlowTest {
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
                                             .readTree(json)
-                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            // 공통 응답 형식 — 성공 본문은 data 안에 있다.
                                             .path("data");
                             assertEquals(capture.getId(), node.get("id").asLong());
                         });

@@ -20,8 +20,8 @@ import org.springframework.web.context.request.async.AsyncRequestTimeoutExceptio
  * "응답이 이미 커밋됐으면 아무것도 쓰지 않는다" 가 <b>모든 핸들러</b>에 적용되는지.
  *
  * <p>이 규칙은 조건 없는 규칙인데 한동안 async 타임아웃 핸들러에만 손으로 들어가 있었다. 그래서 SSE 스트리밍 중 터진 <b>비-타임아웃</b> 예외(근거 전송 실패
- * → {@code completeWithError})가 catch-all 로 가서, 커밋된 응답에 500 봉투를 쓰려 했다 — 그 시도 자체가 다시 실패해 로그에 원인이
- * 가려진다. 지금은 봉투를 만드는 공통 통로가 검사하므로 핸들러 종류와 무관하다.
+ * → {@code completeWithError})가 catch-all 로 가서, 이미 커밋된 응답에 500 본문을 쓰려 했다 — 그 시도 자체가 다시 실패해 로그에 원인이
+ * 가려진다. 지금은 응답을 만드는 공통 통로가 검사하므로 핸들러 종류와 무관하다.
  */
 @Tag("unit")
 class CommittedResponseGuardTest {
@@ -45,7 +45,7 @@ class CommittedResponseGuardTest {
     }
 
     @Test
-    @DisplayName("🟠 커밋된 응답에서는 catch-all 도 봉투를 쓰지 않는다")
+    @DisplayName("🟠 커밋된 응답에서는 catch-all 도 응답을 쓰지 않는다")
     void catchAllWritesNothingAfterCommit() throws IOException {
         bindResponse(true);
 
@@ -53,7 +53,7 @@ class CommittedResponseGuardTest {
     }
 
     @Test
-    @DisplayName("커밋된 응답에서는 async 타임아웃도 봉투를 쓰지 않는다")
+    @DisplayName("커밋된 응답에서는 async 타임아웃도 응답을 쓰지 않는다")
     void asyncTimeoutWritesNothingAfterCommit() throws IOException {
         bindResponse(true);
 
@@ -61,7 +61,7 @@ class CommittedResponseGuardTest {
     }
 
     @Test
-    @DisplayName("아직 아무것도 안 보냈으면 평소대로 봉투를 쓴다 — 가드가 정상 경로를 막지 않는다")
+    @DisplayName("아직 아무것도 안 보냈으면 평소대로 에러 응답을 쓴다 — 가드가 정상 경로를 막지 않는다")
     void writesEnvelopeWhenNothingSentYet() throws IOException {
         bindResponse(false);
 

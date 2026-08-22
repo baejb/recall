@@ -15,10 +15,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * 조회 입구 — HTTP 변환만 담당하고, 답변 스트리밍(SSE)은 AnswerStreamer에 맡긴다.
  *
- * <p><b>공통 응답 봉투({@code ApiResponse})의 유일한 예외</b>다. 이 엔드포인트의 응답은 하나의 JSON 본문이 아니라 토큰 조각의 흐름이라, 조각마다
- * 봉투를 씌우면 프레임 크기가 배로 늘고 스트림 소비 코드가 매 조각에서 {@code success} 를 다시 본다. 실패는 봉투가 아니라 SSE 규약으로 알린다: 스트림 시작
- * <b>전</b> 실패는 아래 {@code requireChat()} 게이트가 예외로 던져 전역 핸들러가 평소의 에러 봉투로 응답하고, 시작 <b>후</b> 실패는 {@code
- * AnswerStreamer} 가 격하 조각 또는 {@code completeWithError} 로 알린다.
+ * <p><b>공통 응답 형식({@code ApiResponse})의 유일한 예외</b>다. 이 엔드포인트의 응답은 하나의 JSON 본문이 아니라 토큰 조각의 흐름이라, 조각마다
+ * 공통 형식을 씌우면 프레임 크기가 배로 늘고 스트림 소비 코드가 매 조각에서 {@code success} 를 다시 본다. 실패는 공통 형식이 아니라 SSE 규약으로 알린다:
+ * 스트림 시작 <b>전</b> 실패는 아래 {@code requireChat()} 게이트가 예외로 던져 전역 핸들러가 평소의 에러 응답을 내고, 시작 <b>후</b> 실패는
+ * {@code AnswerStreamer} 가 격하 조각 또는 {@code completeWithError} 로 알린다.
  */
 @RestController
 @RequestMapping("/api/query")

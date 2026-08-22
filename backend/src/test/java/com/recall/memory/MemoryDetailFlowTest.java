@@ -64,7 +64,7 @@ class MemoryDetailFlowTest {
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
                                             .readTree(json)
-                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            // 공통 응답 형식 — 성공 본문은 data 안에 있다.
                                             .path("data");
                             assertEquals(memory.getId(), node.get("id").asLong());
                             assertEquals(memory.getCaptureId(), node.get("captureId").asLong());
@@ -106,7 +106,7 @@ class MemoryDetailFlowTest {
                             com.fasterxml.jackson.databind.JsonNode node =
                                     new com.fasterxml.jackson.databind.ObjectMapper()
                                             .readTree(json)
-                                            // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                                            // 공통 응답 형식 — 성공 본문은 data 안에 있다.
                                             .path("data");
                             assertEquals("제목만 있음", node.get("title").asText());
                             assertTrue(node.get("summary").isNull());

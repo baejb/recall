@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 검토 대기함 입구 — 승인 게이트(불변 원칙: 승인 전에는 memory 에 쓰지 않는다)의 HTTP 표면.
  *
- * <p>컨트롤러는 HTTP 변환만 한다: 소유자 스코프·상태 검증·인덱싱은 서비스가 판정하고, 예외 → 에러 봉투 변환은 전역 핸들러 한 곳이 담당한다.
+ * <p>컨트롤러는 HTTP 변환만 한다: 소유자 스코프·상태 검증·인덱싱은 서비스가 판정하고, 예외 → 에러 응답 변환은 전역 핸들러 한 곳이 담당한다.
  */
 @RestController
 @RequestMapping("/api/reviews")
@@ -48,8 +48,8 @@ public class ReviewController {
     /**
      * 반려(삭제 아님, 상태만 전이).
      *
-     * <p>돌려줄 값이 없다 — 전에는 {@code Map.of("status", "rejected")} 로 방금 요청한 동작을 되풀이해 알려 줬다. 성공했다는 사실은
-     * 봉투의 {@code success} 가 이미 말한다.
+     * <p>돌려줄 값이 없다 — 전에는 {@code Map.of("status", "rejected")} 로 방금 요청한 동작을 되풀이해 알려 줬다. 성공했다는 사실은 공통
+     * 형식의 {@code success} 가 이미 말한다.
      */
     @PostMapping("/{id}/reject")
     public ApiResponse<Void> reject(@PathVariable Long id) {

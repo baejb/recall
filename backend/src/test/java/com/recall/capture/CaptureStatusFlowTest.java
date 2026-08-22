@@ -155,7 +155,7 @@ class CaptureStatusFlowTest {
     private Long extractCaptureId(String response) throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper()
                 .readTree(response)
-                // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
+                // 공통 응답 형식 — 성공 본문은 data 안에 있다.
                 .path("data")
                 .path("captureId")
                 .asLong();

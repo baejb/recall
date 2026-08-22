@@ -31,8 +31,8 @@ public class CaptureController {
     /**
      * 원문 접수 — 202. 저장 경로는 비동기라(원문 커밋만 동기) 완료가 아니라 접수를 알린다.
      *
-     * <p>상태 코드는 {@code @ResponseStatus} 로 선언한다 — 전에는 {@code ResponseEntity} 를 손으로 조립해서, 본문 타입이 봉투인지
-     * 원본인지 시그니처만 봐선 알 수 없었다.
+     * <p>상태 코드는 {@code @ResponseStatus} 로 선언한다 — 전에는 {@code ResponseEntity} 를 손으로 조립해서, 본문 타입이 공통
+     * 형식인지 원본인지 시그니처만 봐선 알 수 없었다.
      */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)

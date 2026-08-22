@@ -3,7 +3,7 @@ package com.recall.common.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * 도메인·애플리케이션 예외의 공통 부모. {@link ErrorCode}를 들고 있고, {@link GlobalExceptionHandler}가 그 코드로 공통 응답 봉투를
+ * 도메인·애플리케이션 예외의 공통 부모. {@link ErrorCode}를 들고 있고, {@link GlobalExceptionHandler}가 그 코드로 공통 응답 형식을
  * 만든다 — 모듈마다 try-catch 로 HTTP 를 만들지 않는다.
  *
  * <p>HTTP 상태는 예외가 정하지 않고 {@code ErrorCode}에서 나온다 — 코드와 상태가 두 곳에 있으면 어긋날 수 있다.
