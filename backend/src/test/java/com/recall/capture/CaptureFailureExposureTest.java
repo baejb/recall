@@ -80,7 +80,7 @@ class CaptureFailureExposureTest {
     @AfterEach
     void cleanup() {
         for (ReviewItem item : reviewRepository.findAll()) {
-            if (item.getCapture() != null && createdCaptures.contains(item.getCapture().getId())) {
+            if (createdCaptures.contains(item.getCaptureId())) {
                 reviewRepository.delete(item);
             }
         }
@@ -111,10 +111,7 @@ class CaptureFailureExposureTest {
 
         boolean anyReview =
                 reviewRepository.findAll().stream()
-                        .anyMatch(
-                                i ->
-                                        i.getCapture() != null
-                                                && captureId.equals(i.getCapture().getId()));
+                        .anyMatch(i -> captureId.equals(i.getCaptureId()));
         assertFalse(anyReview, "실패 시 부분 검토 항목이 새면 안 된다");
     }
 

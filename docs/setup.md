@@ -62,7 +62,7 @@ macOS·Linux 는 해당 없다.
 | # | 날짜 | 영역 | 결정 | 이유 | 상태 |
 |---|------|------|------|------|------|
 | 1 | 2026-07-30 | data | 벡터/검색 저장소 = PostgreSQL + pgvector | 셀프호스트 1인 1 DB, 관계형+벡터+BM25를 한 엔진에서 | active |
-| 2 | 2026-07-30 | arch | AI/LLM 구동 위치 미정(초기 Spring Boot 내부) | 부하/언어 이슈 시 별도 서비스 분리 여지 유지 | open |
+| 2 | 2026-07-30 | arch | AI/LLM 구동 위치 미정(초기 Spring Boot 내부) | 부하/언어 이슈 시 별도 서비스 분리 여지 유지 | **superseded (43 참조)** |
 | 3 | 2026-07-30 | infra | nginx 리버스 프록시(호스트 구동) | 정적 서빙 + /api 프록시 + SSE 통과 | active |
 | 4 | 2026-07-30 | tooling | 포맷터 = prettier(front) / spotless google-java-format AOSP(back) | 기존 4칸 들여쓰기 유지, 훅으로 강제 | active |
 | 5 | 2026-07-30 | scope | 배포까지 목표(로컬 실행만 아님) | 피드백 반영. 배포 구성은 추후 확정 | open |
@@ -102,7 +102,9 @@ macOS·Linux 는 해당 없다.
 | 39 | 2026-08-23 | 구조 | 검색 인덱스(`memory_embedding`·`search_tsv`)의 **소유권을 search 로** 옮긴다: 저장소는 `search/repository`, 색인 절차는 `search/SearchIndex`(공개 계약) | 저장소가 memory 에 있는 동안 search·store·review 가 각자 직접 잡았고, **색인 절차가 두 곳에 복제**됐다(승인 경로와 재색인 경로가 각자 `SearchRepresentation` 을 조회해 임베딩 저장). 복제의 대가는 규약이 갈라지는 것 — "색인 텍스트에 무엇을 넣는가"를 한쪽만 바꾸면 같은 카드가 승인 직후와 재색인 이후에 다르게 검색된다. 인덱스를 소유한 모듈이 절차도 소유하면 그 갈라짐이 구조적으로 불가능해진다 | active |
 | 40 | 2026-08-23 | 구조 | 모듈 간 계약을 **공개 창구 + record** 로 고정: `memory/MemoryAccess`+`StoredMemory` · `capture/CaptureAccess` · `review/ReviewIntake`. 엔티티·리포지토리를 모듈 밖으로 내보내지 않는다 | 32번이 드러낸 침범 34건을 실제로 없앤 작업. 제일 무거운 건 승인 경로였다: `ReviewService` 가 `new Memory(...)` 로 행을 만들어 직접 저장해 **memory 의 저장 규약이 두 곳에 존재**했고, 그 상태에서 memory 에 불변식을 추가하면 승인으로 만들어진 행만 규약을 벗어난 채 쌓인다. store 는 `ReviewItem` 을 직접 만들어 저장해 **승인 게이트의 입구를 store 가 소유**하고 있었고, `capture.setStatus(DONE)` 으로 남의 상태 기계를 직접 돌렸다. 34 → **6건**(전부 JPA FK 연관) | active |
 | 41 | 2026-08-23 | 구조 | 어휘 상수(`MemoryStatus`·`EmbeddingStatus`)와 다른 모듈이 부르는 서비스(`SettingsService`·`HybridSearchService`)는 **모듈 root** 에 둔다 | "root = 공개 계약" 규칙(32번)을 코드가 실제로 만족하게 만든 정리다. 상태 어휘는 엔티티가 아니라 **공개 값**이고(search 의 SQL 이 `MemoryStatus.ACTIVE` 를 쓴다), 다른 모듈이 import 하는 서비스는 정의상 공개 계약이다. `service/` 안에 두면 "남의 내부를 import 하는 줄"과 구별되지 않아 규칙이 자기 검증력을 잃는다 | active |
-| 42 | 2026-08-23 | 구조 | 남는 침범 **6건은 JPA FK 연관**으로 인정한다: `Memory→Capture` · `ReviewItem→Capture,Memory` 와 그 연관을 세우는 `MemoryAccess`·`ReviewIntake` 의 `getReference` | 이 6건은 스키마의 FK 그 자체다 — 끊으려면 `@ManyToOne` 을 plain FK 컬럼으로 내리고 (마이그레이션은 없지만) 연관을 쓰는 코드·테스트를 함께 바꿔야 한다. 소유자 파생(`user_id` 는 capture 에서만 온다 — 교차유출 금지)을 지키려면 memory 가 capture 를 읽어야 하므로, 연관을 소유한 모듈이 참조 클래스를 아는 것은 회피가 아니라 사실이다. 후속으로 남긴다 | open |
+| 42 | 2026-08-23 | 구조 | ~~남는 침범 **6건은 JPA FK 연관**으로 인정한다~~: `Memory→Capture` · `ReviewItem→Capture,Memory` 와 그 연관을 세우는 `MemoryAccess`·`ReviewIntake` 의 `getReference` | 이 6건은 스키마의 FK 그 자체다 — 끊으려면 `@ManyToOne` 을 plain FK 컬럼으로 내리고 (마이그레이션은 없지만) 연관을 쓰는 코드·테스트를 함께 바꿔야 한다. 소유자 파생(`user_id` 는 capture 에서만 온다 — 교차유출 금지)을 지키려면 memory 가 capture 를 읽어야 하므로, 연관을 소유한 모듈이 참조 클래스를 아는 것은 회피가 아니라 사실이다. 후속으로 남긴다 | open |
+| 43 | 2026-08-23 | 구조 | 모듈 경계를 넘는 FK 는 **연관이 아니라 id 컬럼**으로 맵핑한다(`Memory.captureId` · `ReviewItem.captureId`·`memoryId`). 42번 대체 — 침범 6 → **0건** | 42번에서 "FK 연관은 어쩔 수 없다"고 인정했지만 다시 보니 **스키마 변경이 아니라 매핑 변경**이었다(같은 컬럼, 마이그레이션 없음). 연관으로 두면 그 모듈이 남의 엔티티 클래스를 알아야 하고 그 지식이 행을 만드는 서비스까지 번진다(참조를 얻어야 하므로). 필요한 건 FK 값 하나이고 무결성은 DB 제약이 지킨다. 부수 효과로 lazy 프록시·연관 탐색이 사라져 트랜잭션 밖 접근 사고도 없어졌다 | active |
+| 44 | 2026-08-23 | 보안 | 연관이 **타입으로 강제하던 불변식**(`memory.user_id` = capture 소유자)은 유일한 쓰기 경로가 책임지고, 회귀 테스트가 타입의 자리를 대신한다(`MemoryAccessOwnerDerivationTest`, release-gate) | 43번의 대가다: 생성자가 `Capture` 를 받던 동안은 소유자 파생이 컴파일러가 지키는 사실이었는데, `long` 으로 낮추면 아무 값이나 들어갈 수 있다. 그 강제를 잃은 채 두면 남의 원문으로 만든 카드가 내 소유로 저장될 수 있다(🔴 교차유출). 그래서 `MemoryAccess`·`ReviewIntake` 가 호출자의 값을 믿지 않고 `CaptureAccess.ownerOf` 로 직접 파생하고, 그 동작을 테스트로 고정한다 | active |
 
 ## 4. 개인용 설정 (`templates/`)
 

@@ -69,7 +69,12 @@ class SearchStoreIsolationTest {
         captureIds.add(capture.getId());
         Memory memory =
                 memoryRepository.save(
-                        new Memory(capture, MemoryType.KNOWLEDGE, SHARED_KEYWORD, "{}"));
+                        new Memory(
+                                capture.getId(),
+                                capture.getUserId(),
+                                MemoryType.KNOWLEDGE,
+                                SHARED_KEYWORD,
+                                "{}"));
         long memoryId = memory.getId();
         // BM25 tsv + 벡터 지문을 채워 두 채널 모두 매치되게 한다.
         searchStore.updateSearchTsv(memoryId, SHARED_KEYWORD);

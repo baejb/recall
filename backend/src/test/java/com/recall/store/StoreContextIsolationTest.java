@@ -76,10 +76,7 @@ class StoreContextIsolationTest {
 
         boolean anyReview =
                 reviewRepository.findAll().stream()
-                        .anyMatch(
-                                i ->
-                                        i.getCapture() != null
-                                                && capture.getId().equals(i.getCapture().getId()));
+                        .anyMatch(i -> capture.getId().equals(i.getCaptureId()));
         assertFalse(anyReview, "context 게이트 실패 시 부분 검토 항목이 새면 안 된다(승인 게이트)");
     }
 

@@ -67,8 +67,7 @@ class MemoryDetailFlowTest {
                                             // 공통 응답 봉투 — 성공 본문은 data 안에 있다.
                                             .path("data");
                             assertEquals(memory.getId(), node.get("id").asLong());
-                            assertEquals(
-                                    memory.getCapture().getId(), node.get("captureId").asLong());
+                            assertEquals(memory.getCaptureId(), node.get("captureId").asLong());
                             assertEquals("KNOWLEDGE", node.get("type").asText());
                             assertEquals("N+1 문제 해결", node.get("title").asText());
                             assertEquals("지연 로딩 대신 fetch join 사용", node.get("summary").asText());
@@ -155,7 +154,12 @@ class MemoryDetailFlowTest {
         createdCaptures.add(capture.getId());
         Memory memory =
                 memoryRepository.save(
-                        new Memory(capture, MemoryType.KNOWLEDGE, title, structuredJson));
+                        new Memory(
+                                capture.getId(),
+                                capture.getUserId(),
+                                MemoryType.KNOWLEDGE,
+                                title,
+                                structuredJson));
         createdMemories.add(memory.getId());
         return memory;
     }

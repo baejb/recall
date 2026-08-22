@@ -74,7 +74,8 @@ class ReviewIsolationTest {
         ReviewItem item =
                 reviewRepository.save(
                         new ReviewItem(
-                                capture,
+                                capture.getId(),
+                                capture.getUserId(),
                                 MemoryType.KNOWLEDGE,
                                 Verdict.NEW,
                                 null,
@@ -87,7 +88,7 @@ class ReviewIsolationTest {
     void cleanup() {
         // review_queue 는 capture FK 로 함께 지워진다(TRUNCATE 아닌 delete 경로라 명시 삭제).
         for (ReviewItem item : reviewRepository.findAll()) {
-            if (item.getCapture() != null && captureIds.contains(item.getCapture().getId())) {
+            if (captureIds.contains(item.getCaptureId())) {
                 reviewRepository.delete(item);
             }
         }

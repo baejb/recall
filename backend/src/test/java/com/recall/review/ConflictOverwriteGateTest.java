@@ -89,7 +89,8 @@ class ConflictOverwriteGateTest {
         // 기존 기억(포트=8080)
         Memory existing =
                 new Memory(
-                        c,
+                        c.getId(),
+                        c.getUserId(),
                         MemoryType.KNOWLEDGE,
                         "기존 사실: 포트는 8080",
                         "{\"title\":\"기존 사실\",\"facts\":[\"포트는 8080\"]}");
@@ -100,10 +101,11 @@ class ConflictOverwriteGateTest {
         // 모순 후보(포트=9090)를 기존 기억 대상으로 CONFLICT 판정된 검토 항목
         ReviewItem item =
                 new ReviewItem(
-                        c,
+                        c.getId(),
+                        c.getUserId(),
                         MemoryType.KNOWLEDGE,
                         Verdict.CONFLICT,
-                        existing,
+                        existing.getId(),
                         "포트 값이 기존과 충돌",
                         "{\"title\":\"새 사실\",\"facts\":[\"포트는 9090\"]}");
         reviewRepository.saveAndFlush(item);

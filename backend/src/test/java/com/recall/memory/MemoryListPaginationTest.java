@@ -50,7 +50,7 @@ class MemoryListPaginationTest {
         captureId = c.getId();
         for (int i = 1; i <= 5; i++) {
             MemoryType type = (i % 2 == 1) ? MemoryType.KNOWLEDGE : MemoryType.TROUBLESHOOTING;
-            Memory m = new Memory(c, type, TOK + " " + i, "{}");
+            Memory m = new Memory(c.getId(), c.getUserId(), type, TOK + " " + i, "{}");
             memoryRepository.saveAndFlush(m);
             memIds.add(m.getId());
         }

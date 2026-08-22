@@ -195,7 +195,7 @@ public class MemoryService {
 
         return new MemoryDetailResponse(
                 memory.getId(),
-                memory.getCapture().getId(),
+                memory.getCaptureId(),
                 memory.getType().name(),
                 title,
                 summary,
@@ -258,7 +258,7 @@ public class MemoryService {
     private MemoryResponse toResponse(Memory m) {
         return new MemoryResponse(
                 m.getId(),
-                m.getCapture().getId(),
+                m.getCaptureId(),
                 m.getType().name(),
                 m.getTitle(),
                 m.getSummary(),

@@ -1,12 +1,10 @@
 package com.recall.review;
 
-import com.recall.capture.service.entity.Capture;
+import com.recall.capture.CaptureAccess;
 import com.recall.common.type.MemoryType;
-import com.recall.memory.service.entity.Memory;
 import com.recall.memory.type.Verdict;
 import com.recall.review.repository.ReviewRepository;
 import com.recall.review.service.entity.ReviewItem;
-import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,11 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReviewIntake {
 
     private final ReviewRepository reviewRepository;
-    private final EntityManager entityManager;
+    private final CaptureAccess captures;
 
-    public ReviewIntake(ReviewRepository reviewRepository, EntityManager entityManager) {
+    public ReviewIntake(ReviewRepository reviewRepository, CaptureAccess captures) {
         this.reviewRepository = reviewRepository;
-        this.entityManager = entityManager;
+        this.captures = captures;
     }
 
     /**
@@ -47,12 +45,15 @@ public class ReviewIntake {
             Long targetMemoryId,
             String rationale,
             String proposedJson) {
-        Capture capture = entityManager.getReference(Capture.class, captureId);
-        Memory target =
-                targetMemoryId == null
-                        ? null
-                        : entityManager.getReference(Memory.class, targetMemoryId);
+        long ownerUserId = captures.ownerOf(captureId);
         reviewRepository.save(
-                new ReviewItem(capture, type, verdict, target, rationale, proposedJson));
+                new ReviewItem(
+                        captureId,
+                        ownerUserId,
+                        type,
+                        verdict,
+                        targetMemoryId,
+                        rationale,
+                        proposedJson));
     }
 }

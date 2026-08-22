@@ -98,7 +98,7 @@ public class ReviewService {
         // 소유자(user_id)는 capture 에서 파생하므로 capture id 만 넘긴다.
         long memoryId =
                 memories.createApproved(
-                        item.getCapture().getId(), item.getType(), title(card), item.getProposed());
+                        item.getCaptureId(), item.getType(), title(card), item.getProposed());
         indexForSearch(memoryId, item.getType(), card, ctx);
         item.resolve(ReviewStatus.APPROVED, OffsetDateTime.now());
         return memoryId;
@@ -157,9 +157,9 @@ public class ReviewService {
     private static ReviewItemResponse toResponse(ReviewItem item) {
         return new ReviewItemResponse(
                 item.getId(),
-                item.getCapture().getId(),
+                item.getCaptureId(),
                 item.getJudgement().name(),
-                item.getMemory() == null ? null : item.getMemory().getId(),
+                item.getMemoryId(),
                 item.getJudgeReason(),
                 item.getType() == null ? null : item.getType().name(),
                 item.getStatus(),

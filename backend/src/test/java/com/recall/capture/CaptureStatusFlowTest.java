@@ -82,7 +82,7 @@ class CaptureStatusFlowTest {
     @AfterEach
     void cleanup() {
         for (ReviewItem item : reviewRepository.findAll()) {
-            if (item.getCapture() != null && createdCaptures.contains(item.getCapture().getId())) {
+            if (createdCaptures.contains(item.getCaptureId())) {
                 reviewRepository.delete(item);
             }
         }
@@ -110,10 +110,7 @@ class CaptureStatusFlowTest {
 
         boolean reviewExists =
                 reviewRepository.findAll().stream()
-                        .anyMatch(
-                                i ->
-                                        i.getCapture() != null
-                                                && captureId.equals(i.getCapture().getId()));
+                        .anyMatch(i -> captureId.equals(i.getCaptureId()));
         assertTrue(reviewExists, "성공 경로는 검토 대기함 항목을 만든다");
     }
 

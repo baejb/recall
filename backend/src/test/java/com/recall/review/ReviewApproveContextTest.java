@@ -63,7 +63,8 @@ class ReviewApproveContextTest {
         ReviewItem item =
                 reviewRepository.save(
                         new ReviewItem(
-                                capture,
+                                capture.getId(),
+                                capture.getUserId(),
                                 MemoryType.KNOWLEDGE,
                                 Verdict.NEW,
                                 null,

@@ -76,7 +76,13 @@ class StoreIsolationTest {
         Capture capture = captureRepository.save(new Capture(userId, "chat", "원문", "[]"));
         captureIds.add(capture.getId());
         Memory memory =
-                memoryRepository.save(new Memory(capture, MemoryType.KNOWLEDGE, KEYWORD, "{}"));
+                memoryRepository.save(
+                        new Memory(
+                                capture.getId(),
+                                capture.getUserId(),
+                                MemoryType.KNOWLEDGE,
+                                KEYWORD,
+                                "{}"));
         searchStore.updateSearchTsv(memory.getId(), KEYWORD);
         float[] vector = new float[1024];
         vector[0] = 1f;

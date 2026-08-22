@@ -1,10 +1,9 @@
 package com.recall.memory;
 
-import com.recall.capture.service.entity.Capture;
+import com.recall.capture.CaptureAccess;
 import com.recall.common.type.MemoryType;
 import com.recall.memory.repository.MemoryRepository;
 import com.recall.memory.service.entity.Memory;
-import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,27 +28,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemoryAccess {
 
     private final MemoryRepository memoryRepository;
-    private final EntityManager entityManager;
+    private final CaptureAccess captures;
 
-    public MemoryAccess(MemoryRepository memoryRepository, EntityManager entityManager) {
+    public MemoryAccess(MemoryRepository memoryRepository, CaptureAccess captures) {
         this.memoryRepository = memoryRepository;
-        this.entityManager = entityManager;
+        this.captures = captures;
     }
 
     /**
      * 승인된 카드를 영구 memory 로 만든다(불변 원칙 1: 승인 게이트를 지난 유일한 쓰기 경로).
      *
      * <p><b>userId 를 인자로 받지 않는 이유</b> — 소유자는 {@code capture.user_id} <b>에서만</b> 파생한다. 호출자가 userId 를
-     * 함께 넘길 수 있게 하면 capture 소유자와 다른 값을 넘길 여지가 생기고, 그건 교차유출(🔴)이다. 그래서 여기서 capture 참조를 통해 직접 읽는다.
-     *
-     * <p>{@code getReference} 는 프록시라 실제 SELECT 는 {@code getUserId()} 에서 일어난다 — 트랜잭션 안이므로 안전하다.
+     * 함께 넘길 수 있게 하면 capture 소유자와 다른 값을 넘길 여지가 생기고, 그건 교차유출(🔴)이다. 그래서 여기서 capture 의 공개 계약에 소유자를 물어
+     * 넣는다 — <b>이 모듈의 유일한 쓰기 경로가 그 파생을 책임진다</b>.
      *
      * @return 새로 만들어진 memory.id
      */
     @Transactional
     public long createApproved(long captureId, MemoryType type, String title, String structured) {
-        Capture capture = entityManager.getReference(Capture.class, captureId);
-        return memoryRepository.save(new Memory(capture, type, title, structured)).getId();
+        long ownerUserId = captures.ownerOf(captureId);
+        return memoryRepository
+                .save(new Memory(captureId, ownerUserId, type, title, structured))
+                .getId();
     }
 
     /**

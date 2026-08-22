@@ -78,7 +78,8 @@ class MemoryIsolationTest {
         Memory memory =
                 memoryRepository.save(
                         new Memory(
-                                capture,
+                                capture.getId(),
+                                capture.getUserId(),
                                 MemoryType.KNOWLEDGE,
                                 title,
                                 "{\"title\":\"" + title + "\"}"));
