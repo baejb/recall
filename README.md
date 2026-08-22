@@ -32,5 +32,6 @@ cd frontend && npm install && npm run dev # http://localhost:3000
 - `nginx/` — 리버스 프록시 (호스트 구동, 정적 서빙 + `/api` 프록시, SSE 통과)
 - `docs/` — 설계 문서 (PRD·아키텍처·셋업·훅)
 
-실행 확인: 백엔드 기동 후 `curl http://localhost:8080/api/health` → `{"status":"ok",...}`.
+실행 확인: 백엔드 기동 후 `curl http://localhost:8080/api/health` → `{"success":true,"data":{"status":"ok","service":"recall"}}`.
+모든 REST 응답은 공통 봉투(`{success,data}` / `{success,error}`)를 쓴다 — 스크립트는 `.data.status` 를 읽는다(SSE `POST /api/query` 만 예외).
 문서 지도·온보딩은 `docs/setup.md` 먼저 읽기.

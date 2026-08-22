@@ -85,6 +85,24 @@ LLM provider 키·자격증명을 다루는 코드는 아래를 **반드시** �
   전제, SSRF 여지 축소).
 - **capability 검증** — provider가 해당 역할(chat/embedding)을 지원할 때만 허용(경계에서 거부).
 
+## 구조 · 컨트롤러 · 예외 · 타입 규칙 → `docs/conventions/java-spring.md`
+
+되돌리기 어려운 **구조 규칙**은 별도 문서에 근거와 함께 모아 둔다(2026-08-22 제정). 요약:
+
+- **`common/` 은 주제별 폴더** — `config`(배선) · `exception` · `web`(응답 봉투) · `type`(유형 커널) ·
+  `prompt` · `secret`. 폴더는 개수가 아니라 **종류**로 쪼갠다. `common` 에 도메인 로직·엔티티 금지.
+- **도메인 모듈은 계층별 폴더** — `controller/`(+`controller/dto/`) · `service/`(+`service/entity/`) ·
+  `repository/` · `config/`. **모듈 root 에는 다른 모듈이 import 하는 공개 계약만** 둔다(그래야 경계
+  침범이 import 줄에 드러난다). `service/impl/` 은 만들지 않고, 층이 없는 포트 모듈 `llm/` 은 예외.
+  테스트를 위해 프로덕션 가시성을 넓히지 않는다 — 테스트 트리에 같은 패키지 픽스처를 둔다.
+- **컨트롤러 반환은 `ApiResponse<T>` 하나** — 성공/실패가 같은 형태. 유일한 예외는 SSE(`/api/query`).
+  컨트롤러는 HTTP 변환만, 상태 코드는 `@ResponseStatus` 로 선언.
+- **예외는 종류별 타입 + `ErrorCode` 열거 + 전역 핸들러 하나.** `IllegalState`/`IllegalArgument` 를
+  HTTP 경계까지 올리지 않는다(내부 버그와 호출자 오류가 같은 타입이라 서로를 감춘다).
+- **`Map` 을 계약으로 쓰지 않는다** — 응답·요청·모듈 경계는 타입 있는 record.
+- **반복 문자열은 소유 도메인이 상수로 갖는다** — 닫힌 집합은 enum, 열린 집합은 String 상수.
+- **신호 없는 테스트는 만들지 않는다** — 위임·자기 리터럴·동어반복 금지.
+
 ## 코딩 규칙 (Java)
 
 교과서식 일반론이 아니라 **이 프로젝트에 묶은** 규칙이다. 새 코드는 아래를 따른다.

@@ -22,7 +22,8 @@ cd backend && ./gradlew bootRun            # :8080
 cd frontend && npm install && npm run dev  # :3000 (vite proxy → /api)
 ```
 
-확인: `curl http://localhost:8080/api/health` → `{"status":"ok","service":"recall"}`.
+확인: `curl http://localhost:8080/api/health` → `{"success":true,"data":{"status":"ok","service":"recall"}}`
+(모든 REST 응답이 공통 봉투를 쓴다 — 규칙은 `docs/conventions/java-spring.md` §2).
 프론트(:3000) 화면에 "백엔드: 연결됨 (ok)" 표시.
 
 ## 현재 골격에 있는 것
