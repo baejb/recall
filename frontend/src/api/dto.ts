@@ -174,3 +174,26 @@ export interface CaptureRawResponse {
   rawText: string
   createdAt: string
 }
+
+/**
+ * 모든 REST 응답의 공통 봉투 — 성공은 `{success:true,data}`, 실패는 `{success:false,error}`.
+ * 백엔드 `com.recall.common.web.ApiResponse` 를 미러링한다.
+ *
+ * SSE(`POST /api/query`)만 예외다 — 응답이 하나의 JSON 본문이 아니라 조각의 흐름이라 봉투를 씌우지 않는다.
+ */
+export interface ApiResponse<T> {
+  success: boolean
+  /** 본문 없는 성공(반려 등)에서는 빠진다. */
+  data?: T
+  error?: ApiError
+}
+
+/** 실패 응답 본문. `code` 는 분기용 안정 식별자(한국어 메시지 문자열을 비교하지 않게). */
+export interface ApiError {
+  code: string
+  message: string
+  /** 필드 단위 오류일 때만 채워진다. */
+  field?: string
+  /** 서버 로그와 상관시킬 수 있는 식별자 — 사용자가 보고할 수 있게 메시지에 함께 노출한다. */
+  traceId: string
+}
