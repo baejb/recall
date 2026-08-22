@@ -16,14 +16,14 @@ import com.recall.common.type.MemoryType;
 import com.recall.llm.LlmClient;
 import com.recall.llm.StubEmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.AnswerContribution;
 import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
 import com.recall.memory.type.knowledge.KnowledgeExtraction;
 import com.recall.query.controller.QueryController;
 import com.recall.query.controller.dto.QueryRequest;
-import com.recall.search.service.HybridSearchService;
+import com.recall.search.HybridSearchService;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
@@ -100,8 +100,8 @@ class QueryContextIsolationTest {
         UserAiContext ctx =
                 new UserAiContext(1L, failingLlm, new StubEmbeddingClient(), true, false);
 
-        Memory m1 = Memory.transientCard(MemoryType.KNOWLEDGE, "t1", "{\"title\":\"t1\"}");
-        Memory m2 = Memory.transientCard(MemoryType.KNOWLEDGE, "t2", "{\"title\":\"t2\"}");
+        StoredMemory m1 = new StoredMemory(1, MemoryType.KNOWLEDGE, "{\"title\":\"t1\"}");
+        StoredMemory m2 = new StoredMemory(2, MemoryType.KNOWLEDGE, "{\"title\":\"t2\"}");
         when(search.search(eq("q"), eq(MemoryType.KNOWLEDGE), eq(ctx))).thenReturn(List.of(m1, m2));
 
         AnswerContribution answer =

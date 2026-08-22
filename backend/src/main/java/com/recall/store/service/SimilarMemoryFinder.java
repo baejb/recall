@@ -4,13 +4,13 @@ import com.recall.common.type.MemoryType;
 import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
-import com.recall.memory.service.entity.Memory;
-import com.recall.memory.service.entity.ScoredMemory;
+import com.recall.memory.MemoryAccess;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.EmbeddingKind;
 import com.recall.memory.type.MemoryCard;
 import com.recall.memory.type.SearchRepresentation;
+import com.recall.search.ScoredMemory;
+import com.recall.search.SearchIndex;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,16 +35,16 @@ public class SimilarMemoryFinder {
     /** 채널별로 살펴볼 후보 수. */
     private static final int K = 5;
 
-    private final MemorySearchStore searchStore;
-    private final MemoryRepository memoryRepository;
+    private final SearchIndex searchIndex;
+    private final MemoryAccess memories;
     private final StrategyRegistry<SearchRepresentation> searchReps;
 
     public SimilarMemoryFinder(
-            MemorySearchStore searchStore,
-            MemoryRepository memoryRepository,
+            SearchIndex searchIndex,
+            MemoryAccess memories,
             List<SearchRepresentation> searchRepresentations) {
-        this.searchStore = searchStore;
-        this.memoryRepository = memoryRepository;
+        this.searchIndex = searchIndex;
+        this.memories = memories;
         this.searchReps = new StrategyRegistry<>(searchRepresentations);
     }
 
@@ -53,10 +53,10 @@ public class SimilarMemoryFinder {
      * 원문 (capture)의 소유자다(교차유출 금지). 임베딩은 {@code ctx.requireEmbedding()}으로 얻는다 — 주입된 전역 싱글턴이 아니라
      * capture 소유자에 바인딩된 클라이언트만 쓴다.
      *
-     * <p>후보 재조회는 {@code findByIdAndUserId}로 소유자 조건을 끝까지 유지한다 — 검색 인덱스(searchStore)가 이미 userId로
+     * <p>후보 재조회는 {@code findByIdAndUserId}로 소유자 조건을 끝까지 유지한다 — 검색 인덱스(searchIndex)가 이미 userId로
      * 스코프하지만, 재조회 지점에서도 owner 조건을 한 번 더 강제해 교차유출 방어를 이중화한다(회귀 가드).
      */
-    public Optional<Memory> findSimilar(
+    public Optional<StoredMemory> findSimilar(
             long userId, MemoryCard card, MemoryType type, UserAiContext ctx) {
         Representative representative = representative(card, type);
         String text = representative.text();
@@ -76,12 +76,12 @@ public class SimilarMemoryFinder {
         // 그 둘은 벡터로 대조될 수 없다. 질의 벡터가 하나뿐이라 kind 마다 임베딩을 따로 만들지 않는 한
         // 구조적으로 남는 한계다(그러면 capture 당 임베딩 호출이 kind 수만큼 늘어난다).
         Optional<Long> byVector =
-                searchStore.searchByVector(userId, vector, type, representative.kind(), K).stream()
+                searchIndex.topByVector(userId, vector, type, representative.kind(), K).stream()
                         .filter(s -> s.score() >= TAU_SIM)
                         .map(ScoredMemory::memoryId)
                         .findFirst();
         Optional<Long> byKeyword =
-                searchStore.searchByKeyword(userId, text, type, K).stream()
+                searchIndex.topByKeyword(userId, text, type, K).stream()
                         .map(ScoredMemory::memoryId)
                         .findFirst();
 
@@ -97,10 +97,10 @@ public class SimilarMemoryFinder {
                         byKeyword.get(),
                         representative.kind());
             }
-            return memoryRepository.findByIdAndUserId(byVector.get(), userId);
+            return memories.findOwned(byVector.get(), userId);
         }
 
-        return byKeyword.flatMap(id -> memoryRepository.findByIdAndUserId(id, userId));
+        return byKeyword.flatMap(id -> memories.findOwned(id, userId));
     }
 
     /**

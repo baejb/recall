@@ -1,21 +1,18 @@
 package com.recall.search.service;
 
-import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.MemoryAccess;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
-import com.recall.memory.type.SearchRepresentation;
+import com.recall.search.SearchIndex;
 import com.recall.settings.EmbeddingModelChangedEvent;
-import com.recall.settings.repository.ModelSettingRepository;
-import com.recall.settings.service.entity.EmbeddingStatus;
+import com.recall.settings.EmbeddingStatus;
+import com.recall.settings.SettingsService;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
@@ -45,28 +42,25 @@ public class ReindexService {
 
     private static final Logger log = LoggerFactory.getLogger(ReindexService.class);
 
-    private final MemoryRepository memoryRepository;
-    private final MemorySearchStore searchStore;
+    private final MemoryAccess memories;
+    private final SearchIndex searchIndex;
     private final AiContextFactory contextFactory;
-    private final StrategyRegistry<SearchRepresentation> searchReps;
-    private final ModelSettingRepository settingRepository;
+    private final SettingsService settings;
 
     /** 카드 되읽기는 이 코덱만 한다(모듈마다 ObjectMapper 를 두면 되읽기가 유형 스키마를 건너뛴다). */
     private final CardCodec cardCodec;
 
     public ReindexService(
-            MemoryRepository memoryRepository,
-            MemorySearchStore searchStore,
+            MemoryAccess memories,
+            SearchIndex searchIndex,
             AiContextFactory contextFactory,
             CardCodec cardCodec,
-            List<SearchRepresentation> searchRepresentations,
-            ModelSettingRepository settingRepository) {
-        this.memoryRepository = memoryRepository;
-        this.searchStore = searchStore;
+            SettingsService settings) {
+        this.memories = memories;
+        this.searchIndex = searchIndex;
         this.contextFactory = contextFactory;
         this.cardCodec = cardCodec;
-        this.searchReps = new StrategyRegistry<>(searchRepresentations);
-        this.settingRepository = settingRepository;
+        this.settings = settings;
     }
 
     /**
@@ -99,26 +93,23 @@ public class ReindexService {
             // 끝까지 같은 모델로 임베딩한다(모델 혼재 방지). 미설정이면 AiNotConfiguredException 이 곧장
             // catch 로 떨어져 FAILED 로 드러난다(조용한 실패 금지).
             EmbeddingClient pinned = ctx.requireEmbedding();
-            List<Memory> actives = memoryRepository.findActiveByUserId(userId);
+            List<StoredMemory> actives = memories.activeOf(userId);
             List<Long> unreadable = new ArrayList<>();
-            for (Memory m : actives) {
+            for (StoredMemory m : actives) {
                 // 저장된 카드를 유형 스키마로 되읽는다 — 재색인도 카드 정규화를 거친 값으로 임베딩한다.
                 // 못 읽는 카드 한 건이 잡 전체를 죽이지 않게 건너뛴다: 전에는 여기서 던지면 아래 catch 가
                 // embedding_status=FAILED 로 전이했고, HybridSearchService 는 READY 만 허용하므로 그 사용자의
                 // **벡터 채널이 통째로 꺼졌다**. 게다가 그 카드는 영원히 못 읽으므로 FAILED 가 고착된다.
-                MemoryCard card = cardCodec.readOrNull(m.getType(), m.getStructured());
+                MemoryCard card = cardCodec.readOrNull(m.type(), m.structured());
                 if (card == null) {
                     // 낡은 벡터를 남기면 신구 모델이 섞여 READY 가 거짓이 된다 — 지워서 이 카드만
                     // BM25 전용으로 격하하고, 나머지 벡터 공간의 일관성(=READY 의 의미)을 지킨다.
-                    searchStore.deleteEmbeddings(m.getId());
-                    unreadable.add(m.getId());
+                    searchIndex.clearEmbeddings(m.id());
+                    unreadable.add(m.id());
                     continue;
                 }
-                Map<String, String> texts = searchReps.get(m.getType()).embeddingTexts(card);
-                texts.forEach(
-                        (kind, text) ->
-                                searchStore.saveEmbedding(
-                                        m.getId(), kind, pinned.embedDocument(text)));
+                // 색인 절차는 SearchIndex 가 소유한다 — 승인 경로와 같은 규약을 쓴다(갈라짐 방지).
+                searchIndex.reembed(m.id(), m.type(), card, pinned);
             }
             if (!unreadable.isEmpty()) {
                 log.warn(
@@ -149,8 +140,7 @@ public class ReindexService {
      * 읽거나 다시 쓰지 않으므로, 전체 엔티티 save 가 다른 트랜잭션의 세대 증가분을 덮어쓰는 lost update 가 구조적으로 불가능하다.
      */
     public void setEmbeddingStatusIfCurrent(long userId, String status, long myGeneration) {
-        int updated =
-                settingRepository.updateEmbeddingStatusIfGeneration(userId, status, myGeneration);
+        int updated = settings.setEmbeddingStatusIfGeneration(userId, status, myGeneration);
         if (updated == 0) {
             log.info(
                     "재색인(user={}, generation={})은 더 새로운 generation에 의해 대체됨 — 상태({}) 전이 건너뜀",

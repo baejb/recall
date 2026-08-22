@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -16,15 +17,13 @@ import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.MemoryAccess;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.CardCodec;
-import com.recall.memory.type.SearchRepresentation;
 import com.recall.memory.type.knowledge.KnowledgeCard;
-import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.search.SearchIndex;
+import com.recall.settings.SettingsService;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,11 +32,10 @@ class ReindexServiceTest {
 
     private static final long USER_ID = 42L;
 
-    private final MemoryRepository memoryRepository = mock(MemoryRepository.class);
-    private final MemorySearchStore searchStore = mock(MemorySearchStore.class);
+    private final MemoryAccess memories = mock(MemoryAccess.class);
+    private final SearchIndex searchIndex = mock(SearchIndex.class);
     private final EmbeddingClient pinnedClient = mock(EmbeddingClient.class);
-    private final ModelSettingRepository settingRepository = mock(ModelSettingRepository.class);
-    private final SearchRepresentation rep = mock(SearchRepresentation.class);
+    private final SettingsService settings = mock(SettingsService.class);
     private final CardCodec cardCodec = mock(CardCodec.class);
 
     /**
@@ -47,7 +45,6 @@ class ReindexServiceTest {
      */
     @BeforeEach
     void stubStrategyKey() {
-        when(rep.supports()).thenReturn(MemoryType.KNOWLEDGE);
         // 카드를 읽을 수 있는 정상 상태가 기본이다 — readOrNull 의 mock 기본값(null)은 "못 읽는 카드"를
         // 뜻하고, 그 경우 재색인은 그 memory 의 벡터를 비우고 건너뛴다(전용 테스트에서 확인).
         when(cardCodec.readOrNull(any(), anyString()))
@@ -56,20 +53,11 @@ class ReindexServiceTest {
 
     private ReindexService newService() {
         return new ReindexService(
-                memoryRepository,
-                searchStore,
-                mock(AiContextFactory.class),
-                cardCodec,
-                List.of(rep),
-                settingRepository);
+                memories, searchIndex, mock(AiContextFactory.class), cardCodec, settings);
     }
 
-    private Memory activeMemory(long id) {
-        Memory m = mock(Memory.class);
-        when(m.getId()).thenReturn(id);
-        when(m.getType()).thenReturn(MemoryType.KNOWLEDGE);
-        when(m.getStructured()).thenReturn("{\"document\":\"t\"}");
-        return m;
+    private StoredMemory activeMemory(long id) {
+        return new StoredMemory(id, MemoryType.KNOWLEDGE, "{\"document\":\"t\"}");
     }
 
     /** {@code requireEmbedding()} 이 잡 시작 시점에 고정(pin)되는 클라이언트를 돌려주는 준비된 컨텍스트. */
@@ -89,23 +77,19 @@ class ReindexServiceTest {
     @Test
     @DisplayName("각 활성 memory 를 고정 클라이언트로 재임베딩하고 세대가 현재면 상태를 READY 로 전이한다")
     void reindexUserSuccessSetsReadyWhenGenerationCurrent() {
-        Memory m1 = activeMemory(1L);
-        Memory m2 = activeMemory(2L);
-        when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
-        when(pinnedClient.embedDocument(anyString())).thenReturn(new float[1024]);
-        when(memoryRepository.findActiveByUserId(USER_ID)).thenReturn(List.of(m1, m2));
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "READY", 7L))
-                .thenReturn(1);
+        StoredMemory m1 = activeMemory(1L);
+        StoredMemory m2 = activeMemory(2L);
+        when(memories.activeOf(USER_ID)).thenReturn(List.of(m1, m2));
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "READY", 7L)).thenReturn(1);
 
         newService().reindexUser(USER_ID, 7L, readyContext());
 
-        // 잡 시작 시점의 컨텍스트로 클라이언트를 한 번 고정해 모든 문서에 그 클라이언트를 쓴다.
-        verify(pinnedClient, times(2)).embedDocument(anyString());
-        // memory 2건 × kind 1개 = saveEmbedding 2회
-        verify(searchStore, times(2)).saveEmbedding(any(), anyString(), any());
-        verify(searchStore).saveEmbedding(eq(1L), eq("document"), any());
-        verify(searchStore).saveEmbedding(eq(2L), eq("document"), any());
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "READY", 7L);
+        // 잡 시작 시점에 한 번 고정한 <b>같은</b> 클라이언트가 모든 문서에 넘어가야 한다(모델 혼재 방지).
+        // 임베딩 호출 자체는 SearchIndex 안이라, 여기서는 넘긴 인스턴스로 고정을 확인한다.
+        verify(searchIndex, times(2)).reembed(anyLong(), any(), any(), eq(pinnedClient));
+        verify(searchIndex).reembed(eq(1L), eq(MemoryType.KNOWLEDGE), any(), any());
+        verify(searchIndex).reembed(eq(2L), eq(MemoryType.KNOWLEDGE), any(), any());
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "READY", 7L);
     }
 
     @Test
@@ -114,82 +98,76 @@ class ReindexServiceTest {
         // 카드 하나가 못 읽히면 전에는 루프가 던져 catch 가 embedding_status=FAILED 로 전이했고,
         // HybridSearchService 는 READY 만 허용하므로 그 사용자의 벡터 채널이 통째로 꺼졌다.
         // 게다가 그 카드는 영원히 못 읽으므로 FAILED 가 고착됐다.
-        Memory bad = activeMemory(1L);
-        Memory good = activeMemory(2L);
+        StoredMemory bad = activeMemory(1L);
+        StoredMemory good = activeMemory(2L);
         when(cardCodec.readOrNull(any(), anyString()))
                 .thenReturn(null) // 1번: 못 읽는 레거시 카드
                 .thenReturn(new KnowledgeCard("t", "", List.of(), List.of(), "t"));
-        when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
         when(pinnedClient.embedDocument(anyString())).thenReturn(new float[1024]);
-        when(memoryRepository.findActiveByUserId(USER_ID)).thenReturn(List.of(bad, good));
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "READY", 7L))
-                .thenReturn(1);
+        when(memories.activeOf(USER_ID)).thenReturn(List.of(bad, good));
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "READY", 7L)).thenReturn(1);
 
         newService().reindexUser(USER_ID, 7L, readyContext());
 
         // 못 읽은 카드는 낡은 벡터를 남기지 않는다 — 남기면 신구 모델이 섞여 READY 가 거짓이 된다.
-        verify(searchStore).deleteEmbeddings(1L);
-        verify(searchStore, never()).saveEmbedding(eq(1L), anyString(), any());
+        verify(searchIndex).clearEmbeddings(1L);
+        verify(searchIndex, never()).reembed(eq(1L), any(), any(), any());
         // 나머지는 정상 재색인되고 잡은 READY 로 끝난다(벡터 채널이 꺼지지 않는다).
-        verify(searchStore).saveEmbedding(eq(2L), eq("document"), any());
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "READY", 7L);
-        verify(settingRepository, never())
-                .updateEmbeddingStatusIfGeneration(eq(USER_ID), eq("FAILED"), anyLong());
+        verify(searchIndex).reembed(eq(2L), eq(MemoryType.KNOWLEDGE), any(), any());
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "READY", 7L);
+        verify(settings, never())
+                .setEmbeddingStatusIfGeneration(eq(USER_ID), eq("FAILED"), anyLong());
     }
 
     @Test
     @DisplayName("더 새로운 세대가 행에 반영돼 있으면(대체됨) 뒤처진 잡은 예외 없이 건너뛴다(로그만 남김)")
     void reindexUserDoesNotFailWhenSupersededByNewerGeneration() {
-        Memory m1 = activeMemory(1L);
-        when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
+        StoredMemory m1 = activeMemory(1L);
         when(pinnedClient.embedDocument(anyString())).thenReturn(new float[1024]);
-        when(memoryRepository.findActiveByUserId(USER_ID)).thenReturn(List.of(m1));
+        when(memories.activeOf(USER_ID)).thenReturn(List.of(m1));
         // 이 잡의 세대는 5 지만 행은 이미 다른 세대로 대체됨 — UPDATE 가 0건 매치.
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "READY", 5L))
-                .thenReturn(0);
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "READY", 5L)).thenReturn(0);
 
         newService().reindexUser(USER_ID, 5L, readyContext());
 
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "READY", 5L);
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "READY", 5L);
     }
 
     @Test
     @DisplayName("재임베딩 중 예외가 나면 세대가 현재일 때만 상태를 FAILED 로 전이한다(조용한 실패 금지)")
     void reindexUserFailureSetsFailedWhenGenerationCurrent() {
-        Memory m1 = activeMemory(1L);
-        when(rep.embeddingTexts(any())).thenReturn(Map.of("document", "t"));
-        when(pinnedClient.embedDocument(anyString())).thenThrow(new RuntimeException("boom"));
-        when(memoryRepository.findActiveByUserId(USER_ID)).thenReturn(List.of(m1));
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 3L))
-                .thenReturn(1);
+        StoredMemory m1 = activeMemory(1L);
+        doThrow(new RuntimeException("boom"))
+                .when(searchIndex)
+                .reembed(anyLong(), any(), any(), any());
+        when(memories.activeOf(USER_ID)).thenReturn(List.of(m1));
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 3L)).thenReturn(1);
 
         newService().reindexUser(USER_ID, 3L, readyContext());
 
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 3L);
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 3L);
     }
 
     @Test
     @DisplayName("실패해도 더 새로운 세대가 있으면 뒤처진 잡은 예외 없이 건너뛴다(로그만 남김)")
     void reindexUserDoesNotFailWhenSupersededOnFailurePath() {
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 4L))
-                .thenReturn(0);
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 4L)).thenReturn(0);
 
         newService().reindexUser(USER_ID, 4L, failingContext());
 
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 4L);
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 4L);
     }
 
     @Test
     @DisplayName(
             "embedding 미설정 컨텍스트는 재색인을 FAILED 로 전이한다(requireEmbedding 이 곧장 실패, memory 조회 이전에 차단)")
     void reindexUserFailsFastWhenEmbeddingNotReady() {
-        when(settingRepository.updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 1L))
-                .thenReturn(1);
+        when(settings.setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 1L)).thenReturn(1);
 
         newService().reindexUser(USER_ID, 1L, failingContext());
 
-        verify(settingRepository).updateEmbeddingStatusIfGeneration(USER_ID, "FAILED", 1L);
+        verify(settings).setEmbeddingStatusIfGeneration(USER_ID, "FAILED", 1L);
         // 컨텍스트 고정(requireEmbedding) 자체가 실패했으므로 memory 조회까지 가지 않는다.
-        verify(memoryRepository, never()).findActiveByUserId(anyLong());
+        verify(memories, never()).activeOf(anyLong());
     }
 }

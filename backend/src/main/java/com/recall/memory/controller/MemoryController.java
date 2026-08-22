@@ -1,11 +1,11 @@
 package com.recall.memory.controller;
 
 import com.recall.common.web.ApiResponse;
+import com.recall.memory.MemoryStatus;
 import com.recall.memory.controller.dto.MemoryDetailResponse;
 import com.recall.memory.controller.dto.MemoryPageResponse;
 import com.recall.memory.controller.dto.MemoryStatusRequest;
 import com.recall.memory.service.MemoryService;
-import com.recall.memory.service.entity.MemoryStatus;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;

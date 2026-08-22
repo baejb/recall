@@ -1,8 +1,8 @@
-package com.recall.memory.repository;
+package com.recall.search.repository;
 
 import com.recall.common.type.MemoryType;
-import com.recall.memory.service.entity.MemoryStatus;
-import com.recall.memory.service.entity.ScoredMemory;
+import com.recall.memory.MemoryStatus;
+import com.recall.search.ScoredMemory;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;

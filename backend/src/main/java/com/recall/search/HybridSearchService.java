@@ -1,20 +1,18 @@
-package com.recall.search.service;
+package com.recall.search;
 
 import com.recall.common.type.MemoryType;
 import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
-import com.recall.memory.service.entity.Memory;
-import com.recall.memory.service.entity.ScoredMemory;
+import com.recall.memory.MemoryAccess;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.PlanContribution;
 import com.recall.memory.type.SearchChannel;
-import com.recall.settings.service.SettingsService;
-import com.recall.settings.service.entity.EmbeddingStatus;
+import com.recall.search.repository.MemorySearchStore;
+import com.recall.search.service.RrfFusion;
+import com.recall.settings.EmbeddingStatus;
+import com.recall.settings.SettingsService;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,17 +36,17 @@ public class HybridSearchService {
     // 상수를 들고 있어서, 같은 어휘를 쓰는 세 모듈(settings·search·여기)이 각자 리터럴을 갖고 있었다.
 
     private final MemorySearchStore store;
-    private final MemoryRepository memoryRepository;
+    private final MemoryAccess memories;
     private final StrategyRegistry<PlanContribution> plans;
     private final SettingsService settings;
 
     public HybridSearchService(
             MemorySearchStore store,
-            MemoryRepository memoryRepository,
+            MemoryAccess memories,
             List<PlanContribution> planContributions,
             SettingsService settings) {
         this.store = store;
-        this.memoryRepository = memoryRepository;
+        this.memories = memories;
         this.plans = new StrategyRegistry<>(planContributions);
         this.settings = settings;
     }
@@ -61,7 +59,7 @@ public class HybridSearchService {
      * 혼재)·FAILED(재색인 중간 실패로 신구 모델 벡터 혼재)면 격하. 벡터 채널은 {@code ctx}에 바인딩된 {@link
      * com.recall.llm.EmbeddingClient}만 쓴다(주입된 전역 싱글턴 아님) — 사용자별 provider/키 교차유출 방지.
      */
-    public List<Memory> search(String question, MemoryType type, UserAiContext ctx) {
+    public List<StoredMemory> search(String question, MemoryType type, UserAiContext ctx) {
         long userId = ctx.userId();
         boolean vectorReady =
                 ctx.embeddingReady()
@@ -100,14 +98,13 @@ public class HybridSearchService {
         return scored.stream().map(ScoredMemory::memoryId).toList();
     }
 
-    /** 융합 순위를 유지한 채 memory 엔티티를 로드한다(findAllById는 순서를 보장하지 않음). */
-    private List<Memory> loadInOrder(List<Long> ids) {
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-        Map<Long, Memory> byId =
-                memoryRepository.findAllById(ids).stream()
-                        .collect(Collectors.toMap(Memory::getId, m -> m));
-        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    /**
+     * 융합 순위를 유지한 채 카드를 로드한다.
+     *
+     * <p>순서 유지는 memory 모듈의 계약({@code byIdsInOrder})이 보장한다 — 전에는 이 서비스가 남의 리포지토리를 직접 잡고 {@code
+     * findAllById} 의 순서 미보장을 여기서 손으로 되돌렸다. 그 보정은 조회를 소유한 쪽에 있어야, 다른 호출자가 같은 함정을 다시 밟지 않는다.
+     */
+    private List<StoredMemory> loadInOrder(List<Long> ids) {
+        return ids.isEmpty() ? List.of() : memories.byIdsInOrder(ids);
     }
 }

@@ -14,7 +14,7 @@ import com.recall.common.type.MemoryType;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.StoredMemory;
 import com.recall.query.controller.dto.AnswerFragment;
 import java.util.List;
 import java.util.function.Consumer;
@@ -33,8 +33,8 @@ class AnswerStreamerTest {
     private static final UserAiContext CTX =
             new UserAiContext(1L, mock(LlmClient.class), mock(EmbeddingClient.class), true, false);
 
-    private Memory memory() {
-        return Memory.transientCard(MemoryType.KNOWLEDGE, "제목", "{}");
+    private StoredMemory memory() {
+        return new StoredMemory(1, MemoryType.KNOWLEDGE, "{}");
     }
 
     @Test
@@ -60,7 +60,7 @@ class AnswerStreamerTest {
     void composeFailureDegradesToFallback() throws Exception {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
-        List<Memory> candidates = List.of(memory());
+        List<StoredMemory> candidates = List.of(memory());
         when(pipeline.classify("q", CTX)).thenReturn(MemoryType.KNOWLEDGE);
         when(pipeline.retrieve("q", MemoryType.KNOWLEDGE, CTX)).thenReturn(candidates);
         when(pipeline.rerank(eq("q"), anyList(), eq(CTX))).thenReturn(candidates);
@@ -83,7 +83,7 @@ class AnswerStreamerTest {
     void composeSucceeds() throws Exception {
         QueryPipeline pipeline = mock(QueryPipeline.class);
         SseEmitter emitter = mock(SseEmitter.class);
-        List<Memory> candidates = List.of(memory());
+        List<StoredMemory> candidates = List.of(memory());
         when(pipeline.classify("q", CTX)).thenReturn(MemoryType.KNOWLEDGE);
         when(pipeline.retrieve("q", MemoryType.KNOWLEDGE, CTX)).thenReturn(candidates);
         when(pipeline.rerank(eq("q"), anyList(), eq(CTX))).thenReturn(candidates);

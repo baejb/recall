@@ -1,8 +1,8 @@
 package com.recall.memory.repository;
 
 import com.recall.common.type.MemoryType;
+import com.recall.memory.MemoryStatus;
 import com.recall.memory.service.entity.Memory;
-import com.recall.memory.service.entity.MemoryStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;

@@ -5,23 +5,19 @@ import com.recall.common.exception.ConflictException;
 import com.recall.common.exception.NotFoundException;
 import com.recall.common.secret.SecretMasking;
 import com.recall.common.type.MemoryType;
-import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.MemoryAccess;
 import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
-import com.recall.memory.type.SearchRepresentation;
 import com.recall.review.controller.dto.ReviewItemResponse;
 import com.recall.review.repository.ReviewRepository;
 import com.recall.review.service.entity.ReviewItem;
 import com.recall.review.service.entity.ReviewStatus;
+import com.recall.search.SearchIndex;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,30 +30,27 @@ public class ReviewService {
     private static final Logger log = LoggerFactory.getLogger(ReviewService.class);
 
     private final ReviewRepository reviewRepository;
-    private final MemoryRepository memoryRepository;
-    private final MemorySearchStore searchStore;
+    private final MemoryAccess memories;
+    private final SearchIndex searchIndex;
     private final AiContextFactory contextFactory;
     private final CurrentUserProvider currentUser;
-    private final StrategyRegistry<SearchRepresentation> searchReps;
 
     /** 카드 ↔ JSON 변환은 이 코덱만 한다(모듈마다 ObjectMapper 를 두면 되읽기가 유형 스키마를 건너뛴다). */
     private final CardCodec cardCodec;
 
     public ReviewService(
             ReviewRepository reviewRepository,
-            MemoryRepository memoryRepository,
-            MemorySearchStore searchStore,
+            MemoryAccess memories,
+            SearchIndex searchIndex,
             AiContextFactory contextFactory,
             CurrentUserProvider currentUser,
-            CardCodec cardCodec,
-            List<SearchRepresentation> searchRepresentations) {
+            CardCodec cardCodec) {
         this.reviewRepository = reviewRepository;
-        this.memoryRepository = memoryRepository;
-        this.searchStore = searchStore;
+        this.memories = memories;
+        this.searchIndex = searchIndex;
         this.contextFactory = contextFactory;
         this.currentUser = currentUser;
         this.cardCodec = cardCodec;
-        this.searchReps = new StrategyRegistry<>(searchRepresentations);
     }
 
     /** 승인 대기(pending) 목록을 오래된 순으로. */
@@ -100,9 +93,12 @@ public class ReviewService {
             throw new ConflictException(
                     "이 검토 항목의 카드를 읽을 수 없어 승인할 수 없습니다 — 반려하고 다시 저장해 주세요: " + reviewId);
         }
-        Memory memory =
-                new Memory(item.getCapture(), item.getType(), title(card), item.getProposed());
-        Long memoryId = memoryRepository.save(memory).getId();
+        // 행을 만드는 일은 테이블을 소유한 memory 가 한다 — 전엔 이 모듈이 new Memory(...) 로 직접
+        // 만들어 저장했고, 그래서 memory 의 저장 규약이 두 곳에 존재했다(memory 자신의 경로와 이 경로).
+        // 소유자(user_id)는 capture 에서 파생하므로 capture id 만 넘긴다.
+        long memoryId =
+                memories.createApproved(
+                        item.getCapture().getId(), item.getType(), title(card), item.getProposed());
         indexForSearch(memoryId, item.getType(), card, ctx);
         item.resolve(ReviewStatus.APPROVED, OffsetDateTime.now());
         return memoryId;
@@ -125,37 +121,13 @@ public class ReviewService {
             Long memoryId, MemoryType type, MemoryCard card, UserAiContext ctx) {
         EmbeddingClient embedding = ctx.requireEmbedding();
         try {
-            searchStore.updateSearchTsv(memoryId, keywordText(card));
-            Map<String, String> texts = searchReps.get(type).embeddingTexts(card);
-            texts.forEach(
-                    (kind, text) ->
-                            searchStore.saveEmbedding(
-                                    memoryId, kind, embedding.embedDocument(text)));
+            // 절차는 인덱스를 소유한 search 가 갖고, 실패 취급(memory 는 유지)만 이 모듈이 정한다.
+            searchIndex.indexApproved(memoryId, type, card, embedding);
         } catch (RuntimeException e) {
             log.warn(
                     "검색 인덱싱 실패(memory는 유지) memoryId={}: {}",
                     memoryId,
                     SecretMasking.mask(e.getMessage()));
-        }
-    }
-
-    /**
-     * BM25 대상 텍스트 — 제목·요약·키워드를 합친다.
-     *
-     * <p>카드 접근자로 읽는다 — 전엔 {@code structured.get("title")} 처럼 필드 이름을 이 모듈이 문자열로 다시 적었고, 값 타입도 안 지켜져
-     * {@code keywords instanceof List<?>} 방어를 여기서 또 써야 했다(카드 record 가 이미 정규화한 값인데도).
-     */
-    private String keywordText(MemoryCard card) {
-        StringBuilder sb = new StringBuilder();
-        appendIfPresent(sb, card.title());
-        appendIfPresent(sb, card.summary());
-        card.keywords().forEach(keyword -> appendIfPresent(sb, keyword));
-        return sb.toString().strip();
-    }
-
-    private void appendIfPresent(StringBuilder sb, String value) {
-        if (value != null && !value.isBlank()) {
-            sb.append(value).append(' ');
         }
     }
 

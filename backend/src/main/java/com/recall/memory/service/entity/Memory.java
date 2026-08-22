@@ -2,6 +2,7 @@ package com.recall.memory.service.entity;
 
 import com.recall.capture.service.entity.Capture;
 import com.recall.common.type.MemoryType;
+import com.recall.memory.MemoryStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

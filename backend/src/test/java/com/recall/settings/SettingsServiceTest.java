@@ -1,4 +1,4 @@
-package com.recall.settings.service;
+package com.recall.settings;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -15,8 +15,9 @@ import com.recall.llm.provider.google.GoogleEmbeddingProvider;
 import com.recall.llm.provider.openai.OpenAiChatProvider;
 import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
+import com.recall.settings.SettingsService.SettingsUpdate;
 import com.recall.settings.repository.ModelSettingRepository;
-import com.recall.settings.service.SettingsService.SettingsUpdate;
+import com.recall.settings.service.ProviderCatalog;
 import com.recall.settings.service.entity.ModelSetting;
 import com.recall.settings.service.entity.ModelSettingFixture;
 import java.util.Base64;

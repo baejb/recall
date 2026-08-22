@@ -1,4 +1,4 @@
-package com.recall.settings.service.entity;
+package com.recall.settings;
 
 /**
  * 사용자별 임베딩 인덱스 상태({@code model_setting.embedding_status}) 어휘 — 이 컬럼을 소유한 settings 도메인이 어휘도 소유한다.

@@ -8,11 +8,12 @@ import com.recall.common.type.MemoryType;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.StubEmbeddingClient;
 import com.recall.llm.UserAiContext;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.repository.MemoryRepository;
-import com.recall.memory.repository.MemorySearchStore;
 import com.recall.memory.service.entity.Memory;
 import com.recall.memory.type.knowledge.KnowledgeCard;
 import com.recall.query.service.QueryPipeline;
+import com.recall.search.repository.MemorySearchStore;
 import com.recall.store.service.SimilarMemoryFinder;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,12 +99,12 @@ class StoreIsolationTest {
         // embedding 만 필요(chat 은 이 경로에서 쓰이지 않음) — StubEmbeddingClient 로 기존 동작(0벡터→BM25 폴백)과 동일하게 유지.
         UserAiContext embeddingCtx =
                 new UserAiContext(0L, null, new StubEmbeddingClient(), true, true);
-        Optional<Memory> forA =
+        Optional<StoredMemory> forA =
                 similarMemoryFinder.findSimilar(userA, card, MemoryType.KNOWLEDGE, embeddingCtx);
         assertTrue(forA.isEmpty(), "A 는 B 의 기억을 유사 후보로 끌어오면 안 된다(교차유출)");
 
         // 거짓 통과 방지: B 로 부르면 자기 기억이 잡힌다(색인이 실제로 됐음).
-        Optional<Memory> forB =
+        Optional<StoredMemory> forB =
                 similarMemoryFinder.findSimilar(userB, card, MemoryType.KNOWLEDGE, embeddingCtx);
         assertTrue(forB.isPresent(), "B 는 자기 색인 기억을 후보로 찾는다");
     }
@@ -116,10 +117,10 @@ class StoreIsolationTest {
         UserAiContext ctxA = contextFactory.forUser(userA);
         UserAiContext ctxB = contextFactory.forUser(userB);
 
-        List<Memory> forA = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxA);
+        List<StoredMemory> forA = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxA);
         assertTrue(forA.isEmpty(), "A 검색은 B 의 기억을 근거로 반환하면 안 된다(교차유출)");
 
-        List<Memory> forB = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxB);
+        List<StoredMemory> forB = queryPipeline.retrieve(KEYWORD, MemoryType.KNOWLEDGE, ctxB);
         assertTrue(!forB.isEmpty(), "B 검색은 자기 기억을 근거로 반환한다");
     }
 }

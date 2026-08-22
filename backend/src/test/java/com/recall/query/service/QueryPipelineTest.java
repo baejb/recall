@@ -12,7 +12,7 @@ import com.recall.common.type.MemoryType;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.AnswerContribution;
 import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
@@ -67,12 +67,16 @@ class QueryPipelineTest {
         };
     }
 
-    private static Memory mem(int i) {
-        return Memory.transientCard(MemoryType.KNOWLEDGE, "t" + i, "{\"title\":\"t" + i + "\"}");
+    private static StoredMemory mem(int i) {
+        return new StoredMemory(i, MemoryType.KNOWLEDGE, "{\"title\":\"t" + i + "\"}");
     }
 
-    private static List<String> titles(List<Memory> memories) {
-        return memories.stream().map(Memory::getTitle).toList();
+    /**
+     * 재정렬 결과는 <b>id 순서</b>로 확인한다 — 모듈 계약({@code StoredMemory})은 제목을 나르지 않는다(제목은 카드 안에 있고, 렌더는 유형
+     * 전략이 한다). rerank 가 하는 일은 후보의 순서를 바꾸는 것이므로 id 열이 곧 검증 대상이다.
+     */
+    private static List<Long> ids(List<StoredMemory> memories) {
+        return memories.stream().map(StoredMemory::id).toList();
     }
 
     // ── A 그라운딩 프롬프트 ──────────────────────────────────
@@ -80,10 +84,10 @@ class QueryPipelineTest {
     @Test
     @DisplayName("A 프롬프트에 질문 + 번호 매긴 근거(유형 전략이 렌더한 제목·요약·사실)가 담긴다")
     void evidencePromptCarriesQuestionAndEvidence() {
-        Memory m =
-                Memory.transientCard(
+        StoredMemory m =
+                new StoredMemory(
+                        1,
                         MemoryType.KNOWLEDGE,
-                        "게이트웨이 분리",
                         "{\"title\":\"게이트웨이 분리\",\"summary\":\"토폴로지 분리는 끝났다\","
                                 + "\"facts\":[\"별도 배포 단위\",\"REST·Kafka로만 연결\"]}");
 
@@ -119,8 +123,8 @@ class QueryPipelineTest {
     void reranksByLlmOrderAndKeepsMissing() {
         QueryPipeline p = pipelineWith(List.of());
         UserAiContext ctx = ctxWithLlm((s, u) -> "[2]"); // 2번만 지목
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
-        assertEquals(List.of("t2", "t1", "t3"), titles(out)); // 2 먼저, 나머지 원순서 보존
+        List<StoredMemory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
+        assertEquals(List.of(2L, 1L, 3L), ids(out)); // 2 먼저, 나머지 원순서 보존
     }
 
     @Test
@@ -128,8 +132,8 @@ class QueryPipelineTest {
     void rerankDegradesOnGarbage() {
         QueryPipeline p = pipelineWith(List.of());
         UserAiContext ctx = ctxWithLlm((s, u) -> "관련도를 못 정하겠어요");
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
-        assertEquals(List.of("t1", "t2", "t3"), titles(out));
+        List<StoredMemory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
+        assertEquals(List.of(1L, 2L, 3L), ids(out));
     }
 
     @Test
@@ -141,8 +145,8 @@ class QueryPipelineTest {
                         (s, u) -> {
                             throw new RuntimeException("boom");
                         });
-        List<Memory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
-        assertEquals(List.of("t1", "t2", "t3"), titles(out));
+        List<StoredMemory> out = p.rerank("q", List.of(mem(1), mem(2), mem(3)), ctx);
+        assertEquals(List.of(1L, 2L, 3L), ids(out));
     }
 
     @Test
@@ -150,17 +154,18 @@ class QueryPipelineTest {
     void rerankCapsOutput() {
         QueryPipeline p = pipelineWith(List.of());
         UserAiContext ctx = ctxWithLlm((s, u) -> "[8,7,6,5,4,3,2,1]");
-        List<Memory> in = List.of(mem(1), mem(2), mem(3), mem(4), mem(5), mem(6), mem(7), mem(8));
-        List<Memory> out = p.rerank("q", in, ctx);
+        List<StoredMemory> in =
+                List.of(mem(1), mem(2), mem(3), mem(4), mem(5), mem(6), mem(7), mem(8));
+        List<StoredMemory> out = p.rerank("q", in, ctx);
         assertEquals(6, out.size());
-        assertEquals("t8", out.get(0).getTitle());
+        assertEquals(8L, out.get(0).id());
     }
 
     @Test
     @DisplayName("rerank: 후보 1개면 chat 호출 없이 그대로(미설정 ctx라도 통과)")
     void rerankSkipsForSingle() {
         QueryPipeline p = pipelineWith(List.of());
-        List<Memory> in = List.of(mem(1));
+        List<StoredMemory> in = List.of(mem(1));
         assertEquals(in, p.rerank("q", in, ctxChatNotConfigured()));
     }
 

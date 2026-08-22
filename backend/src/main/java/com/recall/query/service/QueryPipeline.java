@@ -5,12 +5,12 @@ import com.recall.common.type.MemoryTypeMatch;
 import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.AnswerContribution;
 import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
 import com.recall.query.controller.dto.AnswerFragment;
-import com.recall.search.service.HybridSearchService;
+import com.recall.search.HybridSearchService;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -122,7 +122,7 @@ public class QueryPipeline {
      * 검색 쿼리에만 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된 memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
      */
     @Transactional(readOnly = true)
-    public List<Memory> retrieve(String question, MemoryType type, UserAiContext ctx) {
+    public List<StoredMemory> retrieve(String question, MemoryType type, UserAiContext ctx) {
         return readable(searchService.search(question, type, ctx));
     }
 
@@ -132,8 +132,8 @@ public class QueryPipeline {
      * <p>필터를 하류에 흩뿌리지 않는 이유가 하나 더 있다: 리랭크는 프롬프트에 번호를 매기고 LLM이 돌려준 번호로 {@code pool} 을 인덱싱하므로, 프롬프트를
      * 만들 때만 후보를 빼면 <b>번호와 후보가 어긋나 엉뚱한 근거가 상위로 올라간다</b>. 입구에서 한 번 걸러 목록 하나만 흐르게 한다.
      */
-    private List<Memory> readable(List<Memory> candidates) {
-        List<Memory> usable = candidates.stream().filter(m -> card(m) != null).toList();
+    private List<StoredMemory> readable(List<StoredMemory> candidates) {
+        List<StoredMemory> usable = candidates.stream().filter(m -> card(m) != null).toList();
         if (usable.size() != candidates.size()) {
             log.warn(
                     "근거 후보 {}건 중 {}건은 카드를 읽을 수 없어 제외했다",
@@ -168,11 +168,12 @@ public class QueryPipeline {
      * 호출 없이 그대로 둔다. 그 외엔 {@code ctx.requireChat()}로 클라이언트를 얻는다(정상 흐름에선 조회 입구가 이미 chatReady를 보장). 호출
      * 실패·파싱 실패는 W 순서를 유지한다(격하 — 조용한 실패 금지). LLM이 누락한 후보는 뒤에 붙여 근거 유실을 막는다.
      */
-    public List<Memory> rerank(String question, List<Memory> candidates, UserAiContext ctx) {
+    public List<StoredMemory> rerank(
+            String question, List<StoredMemory> candidates, UserAiContext ctx) {
         if (candidates.size() <= 1) {
             return candidates;
         }
-        List<Memory> pool =
+        List<StoredMemory> pool =
                 candidates.size() > RR_INPUT_MAX ? candidates.subList(0, RR_INPUT_MAX) : candidates;
         List<MemoryCard> poolCards = cards(pool);
         if (poolCards.size() != pool.size()) {
@@ -189,7 +190,7 @@ public class QueryPipeline {
                 log.warn("RR 리랭크 파싱 실패 → W 순서 유지");
                 return capped(candidates);
             }
-            List<Memory> reranked = new ArrayList<>();
+            List<StoredMemory> reranked = new ArrayList<>();
             for (int idx : order) {
                 reranked.add(pool.get(idx - 1));
             }
@@ -206,7 +207,7 @@ public class QueryPipeline {
         }
     }
 
-    private static List<Memory> capped(List<Memory> memories) {
+    private static List<StoredMemory> capped(List<StoredMemory> memories) {
         return memories.size() > RR_OUTPUT_MAX ? memories.subList(0, RR_OUTPUT_MAX) : memories;
     }
 
@@ -215,15 +216,18 @@ public class QueryPipeline {
      * 흐름에선 조회 입구가 이미 chatReady를 보장). LLM 호출 실패는 예외로 드러낸다 — 호출부(AnswerStreamer)가 요약 격하를 결정한다.
      */
     public void composeStreaming(
-            String question, List<Memory> candidates, Consumer<String> onToken, UserAiContext ctx) {
+            String question,
+            List<StoredMemory> candidates,
+            Consumer<String> onToken,
+            UserAiContext ctx) {
         ctx.requireChat()
                 .completeStream(ANSWER_SYSTEM, buildEvidencePrompt(question, candidates), onToken);
     }
 
     /** 격하(호출 실패): 각 근거를 유형별 전략으로 렌더(요약)해 근거(memory id)와 함께 조각으로 낸다 — 나열이지만 근거에 매여 있다. */
-    public List<AnswerFragment> fallbackFragments(List<Memory> candidates) {
+    public List<AnswerFragment> fallbackFragments(List<StoredMemory> candidates) {
         return candidates.stream()
-                .map(m -> new AnswerFragment(render(m), m.getId()))
+                .map(m -> new AnswerFragment(render(m), m.id()))
                 .filter(fragment -> !fragment.text().isEmpty())
                 .toList();
     }
@@ -236,19 +240,19 @@ public class QueryPipeline {
      * <b>같은 read 로 또 던져</b> 스트림이 에러로 끝났다. 근거를 빼는 쪽이 근거 없는 답을 만드는 것보다 안전하고 (근거 없는 생성 금지), 남은 근거로는 정상
      * 응답할 수 있다.
      */
-    private String render(Memory memory) {
+    private String render(StoredMemory memory) {
         MemoryCard card = card(memory);
         if (card == null) {
             return "";
         }
-        return answers.get(memory.getType()).render(card);
+        return answers.get(memory.type()).render(card);
     }
 
     /** 저장된 structured JSON → 유형 카드. 읽을 수 없으면 로그를 남기고 {@code null}(조용한 실패 금지). */
-    private MemoryCard card(Memory memory) {
-        MemoryCard card = cardCodec.readOrNull(memory.getType(), memory.getStructured());
+    private MemoryCard card(StoredMemory memory) {
+        MemoryCard card = cardCodec.readOrNull(memory.type(), memory.structured());
         if (card == null) {
-            log.warn("근거 카드를 읽을 수 없다 memoryId={} type={}", memory.getId(), memory.getType());
+            log.warn("근거 카드를 읽을 수 없다 memoryId={} type={}", memory.id(), memory.type());
         }
         return card;
     }
@@ -259,7 +263,7 @@ public class QueryPipeline {
      * <p>{@link #retrieve} 가 이미 읽을 수 없는 후보를 걸렀으므로 여기서는 크기가 유지된다. 그 전제가 깨지면 번호와 후보가 어긋나므로, 호출부가 크기를
      * 비교해 리랭크를 건너뛴다.
      */
-    private List<MemoryCard> cards(List<Memory> memories) {
+    private List<MemoryCard> cards(List<StoredMemory> memories) {
         return memories.stream().map(this::card).filter(Objects::nonNull).toList();
     }
 
@@ -312,11 +316,11 @@ public class QueryPipeline {
      * 때문이다(지식=사실, 트러블슈팅=증상·시도·원인·해결). 공유 코드는 질문·번호·순서만 담당한다(architecture.md 가드레일 2: 유형별 필드를 공유 코드에
      * 하드코딩하지 않는다).
      */
-    String buildEvidencePrompt(String question, List<Memory> candidates) {
+    String buildEvidencePrompt(String question, List<StoredMemory> candidates) {
         StringBuilder sb = new StringBuilder();
         sb.append("질문: ").append(question).append("\n\n근거:\n");
         int n = 1;
-        for (Memory m : candidates) {
+        for (StoredMemory m : candidates) {
             sb.append('[').append(n++).append("] ").append(render(m)).append('\n');
         }
         return sb.toString();

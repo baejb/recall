@@ -1,4 +1,4 @@
-package com.recall.memory.service.entity;
+package com.recall.memory;
 
 import java.util.Set;
 

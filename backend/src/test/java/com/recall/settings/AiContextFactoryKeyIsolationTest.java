@@ -23,7 +23,6 @@ import com.recall.llm.provider.voyage.VoyageEmbeddingClient;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.repository.ModelSettingRepository;
 import com.recall.settings.service.ProviderCatalog;
-import com.recall.settings.service.SettingsService;
 import com.recall.settings.service.entity.ModelSetting;
 import com.recall.settings.service.entity.ModelSettingFixture;
 import java.util.Base64;

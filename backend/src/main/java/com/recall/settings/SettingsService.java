@@ -1,4 +1,4 @@
-package com.recall.settings.service;
+package com.recall.settings;
 
 import com.recall.common.config.BootstrapCurrentUserProvider;
 import com.recall.common.config.CurrentUserProvider;
@@ -9,10 +9,10 @@ import com.recall.common.secret.SecretMasking;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
-import com.recall.settings.EmbeddingModelChangedEvent;
 import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.EmbeddingProbeException;
+import com.recall.settings.service.ProviderCatalog;
 import com.recall.settings.service.ProviderCatalog.Role;
-import com.recall.settings.service.entity.EmbeddingStatus;
 import com.recall.settings.service.entity.ModelSetting;
 import java.util.List;
 import java.util.Locale;
@@ -169,6 +169,23 @@ public class SettingsService {
     @Transactional
     public void setEmbeddingStatus(String status) {
         row(currentUser.currentUserId()).setEmbeddingStatus(status);
+    }
+
+    /**
+     * 세대(generation) 토큰이 <b>아직 현재일 때만</b> embedding_status 를 쓴다.
+     *
+     * <p>재색인 잡의 <b>펜싱</b>이다: 임베딩 설정을 연달아 바꾸면 잡이 여러 개 생기고, 뒤늦게 끝난 앞선 잡이 상태를 쓰면 반쯤 재색인된(모델 혼재) 인덱스가
+     * {@code READY} 로 보인다. 조건부 UPDATE 로 마지막 잡만 쓰게 만든다.
+     *
+     * <p><b>왜 여기에 있나</b> — 재색인은 search 의 일이지만 {@code model_setting} 은 settings 의 테이블이다. 전에는 {@code
+     * ReindexService} 가 {@code ModelSettingRepository} 를 직접 잡아 이 조건부 UPDATE 를 남의 모듈에서 실행했다. 그러면 "이
+     * 컬럼을 어떤 조건으로 쓸 수 있는가"라는 규칙이 컬럼 소유자 밖에 놓인다.
+     *
+     * @return 실제로 쓰인 행 수(0 이면 더 새로운 세대가 이미 있다 — 뒤처진 잡)
+     */
+    @Transactional
+    public int setEmbeddingStatusIfGeneration(long userId, String status, long generation) {
+        return repository.updateEmbeddingStatusIfGeneration(userId, status, generation);
     }
 
     @Transactional

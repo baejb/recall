@@ -2,7 +2,7 @@ package com.recall.query.service;
 
 import com.recall.common.type.MemoryType;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.service.entity.Memory;
+import com.recall.memory.StoredMemory;
 import com.recall.query.controller.dto.AnswerFragment;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -54,7 +54,8 @@ public class AnswerStreamer {
     void emit(SseEmitter emitter, String question, UserAiContext ctx) {
         try {
             MemoryType type = pipeline.classify(question, ctx); // C — 질문 유형(지식/트슈)
-            List<Memory> candidates = pipeline.retrieve(question, type, ctx); // R·W(ctx.userId 스코프)
+            List<StoredMemory> candidates =
+                    pipeline.retrieve(question, type, ctx); // R·W(ctx.userId 스코프)
             if (candidates.isEmpty()) {
                 // 검색은 분류된 유형으로만 스코프된다(searchByVector/searchByKeyword 둘 다 `type = ?` —
                 // boost 가 아니라 배타적 필터). 그래서 "기록 없음"에는 두 원인이 섞인다: 정말 기록이 없거나,
@@ -70,7 +71,7 @@ public class AnswerStreamer {
 
             // RR: 후보 1개 이하면 파이프라인 내부에서 chat 호출 없이 그대로, 그 외엔 재정렬(호출 실패 시 W 순서
             // 유지 — 격하). chat 미설정 차단은 이미 조회 입구(QueryController)를 통과했으므로 여기선 발생하지 않는다.
-            List<Memory> evidence = pipeline.rerank(question, candidates, ctx);
+            List<StoredMemory> evidence = pipeline.rerank(question, candidates, ctx);
 
             boolean[] sentText = {false};
             StringBuilder answer = new StringBuilder();
@@ -100,8 +101,8 @@ public class AnswerStreamer {
                 // LLM이 "기록 없음"으로 답했으면(근거가 질문에 답 못 함) 근거를 붙이지 않는다 — 모순된 표시 방지.
                 if (!isNoRecord(answer.toString())) {
                     // LLM 답(완성/부분) 뒤에 근거 citation을 붙인다(text 없이 memoryId만).
-                    for (Memory m : evidence) {
-                        sendFragment(emitter, new AnswerFragment("", m.getId()));
+                    for (StoredMemory m : evidence) {
+                        sendFragment(emitter, new AnswerFragment("", m.id()));
                     }
                 }
             } else {

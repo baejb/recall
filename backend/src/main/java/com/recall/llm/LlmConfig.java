@@ -1,7 +1,7 @@
 package com.recall.llm;
 
 import com.recall.common.secret.SecretCipher;
-import com.recall.settings.service.SettingsService;
+import com.recall.settings.SettingsService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
