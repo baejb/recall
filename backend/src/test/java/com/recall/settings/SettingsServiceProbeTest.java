@@ -3,9 +3,10 @@ package com.recall.settings;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.recall.common.BadRequestException;
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.SecretCipher;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.UpstreamUnavailableException;
+import com.recall.common.exception.ValidationException;
+import com.recall.common.secret.SecretCipher;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
@@ -17,6 +18,11 @@ import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.SettingsService.SettingsUpdate;
 import com.recall.settings.SettingsService.UpdateResult;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.EmbeddingProbeException;
+import com.recall.settings.service.ProviderCatalog;
+import com.recall.settings.service.entity.ModelSetting;
+import com.recall.settings.service.entity.ModelSettingFixture;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -83,7 +89,7 @@ class SettingsServiceProbeTest {
     }
 
     private ModelSetting seedRow() {
-        ModelSetting s = new ModelSetting();
+        ModelSetting s = ModelSettingFixture.empty();
         s.setChatProvider("anthropic");
         s.setChatModel("claude-opus-4-8");
         s.setEmbeddingProvider("voyage");
@@ -98,10 +104,21 @@ class SettingsServiceProbeTest {
         ModelSetting seed = seedRow();
         when(repo.findByUserId(1L)).thenReturn(Optional.of(seed));
 
-        // factory 가 예외 던지는 임베딩 클라이언트를 반환하도록 구성
+        // factory 가 예외 던지는 임베딩 클라이언트를 반환하도록 구성.
+        // provider 의 401 은 HTTP 응답으로 오므로 RestClientResponseException 으로 재현한다 —
+        // 전에는 맨 RuntimeException 을 던졌는데, 그러면 "우리 클라이언트 코드의 결함"과 "provider 가
+        // 자격증명을 거절함"이 같은 입력으로 표현돼 어느 쪽을 검증하는지 알 수 없다(실제 401 은 4xx 응답이다).
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
         EmbeddingClient bad = mock(EmbeddingClient.class);
-        when(bad.embedDocument(anyString())).thenThrow(new RuntimeException("401 unauthorized"));
+        when(bad.embedDocument(anyString()))
+                .thenThrow(
+                        new RestClientResponseException(
+                                "401 Unauthorized",
+                                HttpStatus.UNAUTHORIZED,
+                                "Unauthorized",
+                                null,
+                                null,
+                                StandardCharsets.UTF_8));
         when(factory.forSettings(any())).thenReturn(bad);
 
         SettingsService svc =
@@ -260,6 +277,8 @@ class SettingsServiceProbeTest {
 
         // HTTP 상태 예외가 아닌 저수준 예외(예: RestClient가 요청 URI를 메시지에 그대로 담는 IO
         // 오류)의 메시지에 키가 섞여 나오는 경우도 방어적으로 마스킹돼야 한다.
+        // 이 계열은 502(UpstreamUnavailable)로 분류된다 — provider 가 응답조차 하지 않았으니 "사용자 입력이
+        // 잘못됐다"고 단정할 근거가 없다. 상태가 어떻게 분류되든 마스킹 보장은 유지돼야 한다(🔴 자격증명 유출 방어).
         String fakeUrl =
                 "https://generativelanguage.googleapis.com/v1beta/models/x:embedContent?key=AIzaFAKEKEY123456";
         EmbeddingClientFactory factory = mock(EmbeddingClientFactory.class);
@@ -271,9 +290,9 @@ class SettingsServiceProbeTest {
 
         SettingsService svc = newService(repo, factory, mock(ApplicationEventPublisher.class));
 
-        EmbeddingProbeException ex =
+        UpstreamUnavailableException ex =
                 assertThrows(
-                        EmbeddingProbeException.class,
+                        UpstreamUnavailableException.class,
                         () ->
                                 svc.update(
                                         new SettingsUpdate(
@@ -325,7 +344,7 @@ class SettingsServiceProbeTest {
 
         // 옛 키는 옛 provider(anthropic) 것 — provider 만 openai 로 바꾸면 400.
         assertThrows(
-                BadRequestException.class,
+                ValidationException.class,
                 () ->
                         svc.update(
                                 new SettingsUpdate(
@@ -394,7 +413,7 @@ class SettingsServiceProbeTest {
         SettingsService svc = newServiceNoEnvEmbeddingKey(repo, factory, publisher);
 
         assertThrows(
-                BadRequestException.class,
+                ValidationException.class,
                 () ->
                         svc.update(
                                 new SettingsUpdate(
@@ -459,7 +478,7 @@ class SettingsServiceProbeTest {
                         mock(ApplicationEventPublisher.class));
 
         assertThrows(
-                BadRequestException.class,
+                ValidationException.class,
                 () ->
                         svc.update(
                                 new SettingsUpdate(
@@ -486,7 +505,7 @@ class SettingsServiceProbeTest {
                         mock(ApplicationEventPublisher.class));
 
         assertThrows(
-                BadRequestException.class,
+                ValidationException.class,
                 () ->
                         svc.update(
                                 new SettingsUpdate(

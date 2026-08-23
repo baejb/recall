@@ -2,6 +2,7 @@ package com.recall.llm;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,7 +20,7 @@ public class EmbeddingClientFactory {
     public EmbeddingClientFactory(List<EmbeddingProvider> providers) {
         Map<String, EmbeddingProvider> map = new HashMap<>();
         for (EmbeddingProvider p : providers) {
-            EmbeddingProvider previous = map.put(p.name().toLowerCase(), p);
+            EmbeddingProvider previous = map.put(p.name().toLowerCase(Locale.ROOT), p);
             if (previous != null) {
                 throw new IllegalStateException(
                         "한 provider 이름에 embedding 서술자가 둘 이상 등록됨: " + p.name());
@@ -32,7 +33,7 @@ public class EmbeddingClientFactory {
         if (props.apiKey() == null || props.apiKey().isBlank()) {
             return new StubEmbeddingClient();
         }
-        EmbeddingProvider provider = byName.get(props.provider().toLowerCase());
+        EmbeddingProvider provider = byName.get(props.provider().toLowerCase(Locale.ROOT));
         if (provider == null) {
             throw new IllegalStateException("등록되지 않은 provider: " + props.provider());
         }

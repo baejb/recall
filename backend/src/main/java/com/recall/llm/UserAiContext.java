@@ -1,6 +1,6 @@
 package com.recall.llm;
 
-import com.recall.common.AiNotConfiguredException;
+import com.recall.common.exception.AiNotConfiguredException;
 
 /**
  * 사용자별 AI 클라이언트 스냅샷 — {@link AiContextFactory#forUser(long)} 호출 시점의 {@code SettingsService} 조회로 고정한

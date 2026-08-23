@@ -8,13 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.recall.common.PromptLoader;
+import com.recall.common.prompt.PromptLoader;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.type.Judgement;
 import com.recall.memory.type.Verdict;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +24,11 @@ import org.junit.jupiter.api.Test;
  */
 class KnowledgeJudgeTest {
 
-    private static final Map<String, Object> PROPOSED = Map.of("title", "RRF", "document", "본문");
-    private static final Map<String, Object> EXISTING = Map.of("title", "RRF", "document", "기존 본문");
+    // 판정 입력이 카드 타입이라 필드 이름을 테스트가 문자열로 다시 적지 않는다.
+    private static final KnowledgeCard PROPOSED =
+            new KnowledgeCard("RRF", "", List.of(), List.of(), "본문");
+    private static final KnowledgeCard EXISTING =
+            new KnowledgeCard("RRF", "", List.of(), List.of(), "기존 본문");
     private static final KnowledgeJudge JUDGE = new KnowledgeJudge(new PromptLoader());
 
     private static UserAiContext ctxWithResponse(String response) {
@@ -34,16 +37,9 @@ class KnowledgeJudgeTest {
     }
 
     @Test
-    @DisplayName("supports()는 KNOWLEDGE")
-    void supports() {
-        assertEquals(Verdict.NEW, JUDGE.judge(PROPOSED, Map.of(), ctxWithResponse("{}")).verdict());
-    }
-
-    @Test
-    @DisplayName("유사 후보가 없으면(existing 빈 맵) LLM 없이 NEW")
+    @DisplayName("유사 후보가 없으면(existing null) LLM 없이 NEW")
     void newWhenNoExisting() {
-        Judgement j =
-                JUDGE.judge(PROPOSED, Map.of(), ctxWithResponse("{\"verdict\":\"RECURRENCE\"}"));
+        Judgement j = JUDGE.judge(PROPOSED, null, ctxWithResponse("{\"verdict\":\"RECURRENCE\"}"));
         assertEquals(Verdict.NEW, j.verdict());
         assertNull(j.targetMemoryId());
     }
@@ -115,7 +111,7 @@ class KnowledgeJudgeTest {
                 new UserAiContext(
                         1L, mock(LlmClient.class), mock(EmbeddingClient.class), false, true);
 
-        Judgement j = JUDGE.judge(PROPOSED, Map.of(), chatNotConfigured);
+        Judgement j = JUDGE.judge(PROPOSED, null, chatNotConfigured);
 
         assertEquals(Verdict.NEW, j.verdict());
     }

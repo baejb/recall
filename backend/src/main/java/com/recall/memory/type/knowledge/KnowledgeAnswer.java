@@ -1,9 +1,8 @@
 package com.recall.memory.type.knowledge;
 
-import com.recall.common.MemoryType;
+import com.recall.common.type.MemoryType;
 import com.recall.memory.type.AnswerContribution;
-import java.util.List;
-import java.util.Map;
+import com.recall.memory.type.MemoryCard;
 import org.springframework.stereotype.Component;
 
 /**
@@ -27,19 +26,20 @@ public class KnowledgeAnswer implements AnswerContribution {
     }
 
     @Override
-    public String render(Map<String, Object> memory) {
+    public String render(MemoryCard card) {
+        // 레지스트리가 memory.type 으로 디스패치하므로 정상 흐름에서 카드 타입은 반드시 일치한다.
+        // 어긋났다면 배선 버그이므로 조용히 다른 유형처럼 렌더하지 않고 즉시 드러낸다(조용한 실패 금지).
+        KnowledgeCard kn = requireKnowledge(card);
         StringBuilder sb = new StringBuilder();
 
-        String title = str(memory.get("title"));
-        String summary = str(memory.get("summary"));
-        if (!title.isBlank()) {
-            sb.append(title);
+        if (!kn.title().isBlank()) {
+            sb.append(kn.title());
         }
-        if (!summary.isBlank()) {
-            sb.append(sb.isEmpty() ? "" : " — ").append(summary);
+        if (!kn.summary().isBlank()) {
+            sb.append(sb.isEmpty() ? "" : " — ").append(kn.summary());
         }
 
-        String facts = facts(memory.get("facts"));
+        String facts = joinFacts(kn);
         if (!facts.isBlank()) {
             sb.append(INDENT).append("사실: ").append(facts);
         }
@@ -47,19 +47,21 @@ public class KnowledgeAnswer implements AnswerContribution {
         return sb.isEmpty() ? "(내용 없음)" : sb.toString();
     }
 
-    /** 사실 항목을 가운뎃점으로 잇는다(공유 프롬프트가 쓰던 형식과 동일). */
-    private String facts(Object facts) {
-        if (!(facts instanceof List<?> list)) {
-            return "";
+    private static KnowledgeCard requireKnowledge(MemoryCard card) {
+        if (card instanceof KnowledgeCard kn) {
+            return kn;
         }
-        return list.stream()
-                .map(KnowledgeAnswer::str)
+        throw new IllegalArgumentException(
+                "KNOWLEDGE 전략에 다른 유형 카드가 전달됨: "
+                        + (card == null ? "null" : card.getClass().getSimpleName()));
+    }
+
+    /** 사실 항목을 가운뎃점으로 잇는다(공유 프롬프트가 쓰던 형식과 동일). */
+    private String joinFacts(KnowledgeCard kn) {
+        return kn.facts().stream()
+                .map(fact -> fact == null ? "" : fact.strip())
                 .filter(fact -> !fact.isBlank())
                 .reduce((a, b) -> a + " · " + b)
                 .orElse("");
-    }
-
-    private static String str(Object o) {
-        return o == null ? "" : o.toString().strip();
     }
 }

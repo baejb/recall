@@ -1,7 +1,8 @@
 package com.recall.memory.type.troubleshooting;
 
-import com.recall.common.MemoryType;
+import com.recall.common.type.MemoryType;
 import com.recall.memory.type.PlanContribution;
+import com.recall.memory.type.SearchChannel;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -30,9 +31,11 @@ public class TroubleshootingPlanContribution implements PlanContribution {
     }
 
     @Override
-    public Map<String, Double> channelWeights() {
+    public Map<SearchChannel, Double> channelWeights() {
+        // 채널 이름을 문자열로 적지 않는다 — 오타가 나면 RrfFusion 이 getOrDefault(1.0) 으로 조용히 삼켜
+        // "BM25 우위" 설계가 무효화됐다(로그도 없음). enum 이면 그 오타가 컴파일 에러다.
         return Map.of(
-                "memory_bm25", MEMORY_BM25_WEIGHT,
-                "memory_vector", MEMORY_VECTOR_WEIGHT);
+                SearchChannel.MEMORY_BM25, MEMORY_BM25_WEIGHT,
+                SearchChannel.MEMORY_VECTOR, MEMORY_VECTOR_WEIGHT);
     }
 }

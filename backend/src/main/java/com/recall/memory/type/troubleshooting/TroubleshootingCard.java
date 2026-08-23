@@ -1,8 +1,11 @@
 package com.recall.memory.type.troubleshooting;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.recall.memory.type.MemoryCard;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 /**
  * 트러블슈팅(troubleshooting) 유형의 구조화 스키마(S2 추출 결과)의 단일 기준점. PRD §04의 troubleshooting 필드
@@ -37,7 +40,19 @@ public record TroubleshootingCard(
         List<Attempt> attempts,
         @JsonProperty("root_cause") String rootCause,
         @JsonProperty("final_solution") String finalSolution,
-        String status) {
+        String status)
+        implements MemoryCard {
+
+    /**
+     * 트러블슈팅은 카드 내용의 상태(해결 여부)를 정의하는 유형이므로 공유 계약에 그 값을 노출한다.
+     *
+     * <p>공유 코드가 {@code structured}의 {@code "status"} 키를 직접 읽던 것을 대체한다 — 그 방식은 {@code "status"}라는
+     * 이름을 모든 유형에 예약해, 자기 의미의 {@code status}를 가진 유형이 생기면 목록 배지가 그 값을 해결상태로 오해하게 만든다.
+     */
+    @Override
+    public Optional<String> contentStatus() {
+        return Optional.of(status);
+    }
 
     /** 해결됨. */
     public static final String RESOLVED = "RESOLVED";
@@ -100,7 +115,7 @@ public record TroubleshootingCard(
         }
 
         private static String normalizeOutcome(String raw) {
-            String normalized = text(raw).toLowerCase();
+            String normalized = text(raw).toLowerCase(Locale.ROOT);
             return OUTCOMES.contains(normalized) ? normalized : UNKNOWN;
         }
     }
@@ -118,7 +133,7 @@ public record TroubleshootingCard(
     }
 
     private static String normalizeStatus(String raw) {
-        String normalized = text(raw).toUpperCase();
+        String normalized = text(raw).toUpperCase(Locale.ROOT);
         return STATUSES.contains(normalized) ? normalized : UNRESOLVED;
     }
 

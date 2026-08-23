@@ -1,9 +1,8 @@
 package com.recall.memory.type.troubleshooting;
 
-import com.recall.common.MemoryType;
+import com.recall.common.type.MemoryType;
 import com.recall.memory.type.AnswerContribution;
-import java.util.List;
-import java.util.Map;
+import com.recall.memory.type.MemoryCard;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
@@ -28,33 +27,45 @@ public class TroubleshootingAnswer implements AnswerContribution {
     }
 
     @Override
-    public String render(Map<String, Object> memory) {
+    public String render(MemoryCard card) {
+        // 레지스트리가 memory.type 으로 디스패치하므로 정상 흐름에서 카드 타입은 반드시 일치한다.
+        // 어긋났다면 배선 버그이므로 조용히 다른 유형처럼 렌더하지 않고 즉시 드러낸다(조용한 실패 금지).
+        TroubleshootingCard ts = requireTroubleshooting(card);
         StringBuilder sb = new StringBuilder();
 
-        String title = str(memory.get("title"));
-        String summary = str(memory.get("summary"));
-        if (!title.isBlank()) {
-            sb.append(title);
+        if (!ts.title().isBlank()) {
+            sb.append(ts.title());
         }
-        if (!summary.isBlank()) {
-            sb.append(sb.isEmpty() ? "" : " — ").append(summary);
+        if (!ts.summary().isBlank()) {
+            sb.append(sb.isEmpty() ? "" : " — ").append(ts.summary());
         }
 
-        append(sb, "증상", str(memory.get("symptom")));
-        append(sb, "에러", errorLine(memory));
-        append(sb, "환경", str(memory.get("environment")));
-        append(sb, "시도", attempts(memory.get("attempts")));
-        append(sb, "원인", str(memory.get("root_cause")));
-        append(sb, "해결", str(memory.get("final_solution")));
-        append(sb, "상태", str(memory.get("status")));
+        // 카드 접근자로 읽는다 — 전엔 memory.get("root_cause") 처럼 필드 이름을 문자열로 다시 적어서,
+        // 스키마가 바뀌어도 컴파일 에러 없이 근거가 조용히 비었다.
+        append(sb, "증상", ts.symptom());
+        append(sb, "에러", errorLine(ts));
+        append(sb, "환경", ts.environment());
+        append(sb, "시도", attempts(ts));
+        append(sb, "원인", ts.rootCause());
+        append(sb, "해결", ts.finalSolution());
+        append(sb, "상태", ts.status());
 
         return sb.isEmpty() ? "(내용 없음)" : sb.toString();
     }
 
+    private static TroubleshootingCard requireTroubleshooting(MemoryCard card) {
+        if (card instanceof TroubleshootingCard ts) {
+            return ts;
+        }
+        throw new IllegalArgumentException(
+                "TROUBLESHOOTING 전략에 다른 유형 카드가 전달됨: "
+                        + (card == null ? "null" : card.getClass().getSimpleName()));
+    }
+
     /** 에러는 시그니처를 앞세우고, 원문 조각이 따로 있으면 함께 남긴다(정확 토큰과 맥락 둘 다 근거가 된다). */
-    private String errorLine(Map<String, Object> memory) {
-        String signature = str(memory.get("error_signature"));
-        String message = str(memory.get("error_message"));
+    private String errorLine(TroubleshootingCard ts) {
+        String signature = ts.errorSignature();
+        String message = ts.errorMessage();
         if (signature.isBlank()) {
             return message;
         }
@@ -64,42 +75,33 @@ public class TroubleshootingAnswer implements AnswerContribution {
     }
 
     /** 시도 이력 — {@code 조치 → 결과 (판정)}을 가운뎃점으로 잇는다. 실패 판정도 그대로 노출한다. */
-    private String attempts(Object attempts) {
-        if (!(attempts instanceof List<?> list)) {
-            return "";
-        }
-        return list.stream()
+    private String attempts(TroubleshootingCard ts) {
+        return ts.attempts().stream()
                 .map(this::attemptLine)
                 .filter(line -> !line.isBlank())
                 .reduce((a, b) -> a + " · " + b)
                 .orElse("");
     }
 
-    private String attemptLine(Object attempt) {
-        if (!(attempt instanceof Map<?, ?> map)) {
-            return str(attempt);
+    private String attemptLine(TroubleshootingCard.Attempt attempt) {
+        // Attempt 가 타입이라 instanceof Map<?,?> 방어가 필요 없다 — 값 정규화는 record 생성자가 이미 했다.
+        if (attempt == null) {
+            return "";
         }
-        String action = str(map.get("action"));
-        String result = str(map.get("result"));
-        String outcome = str(map.get("outcome"));
-        if (action.isBlank() && result.isBlank()) {
+        if (attempt.action().isBlank() && attempt.result().isBlank()) {
             return "";
         }
         String joined =
-                Stream.of(action, result)
+                Stream.of(attempt.action(), attempt.result())
                         .filter(value -> !value.isBlank())
                         .reduce((a, b) -> a + " → " + b)
                         .orElse("");
-        return outcome.isBlank() ? joined : joined + " (" + outcome + ")";
+        return attempt.outcome().isBlank() ? joined : joined + " (" + attempt.outcome() + ")";
     }
 
     private void append(StringBuilder sb, String label, String value) {
         if (value != null && !value.isBlank()) {
             sb.append(INDENT).append(label).append(": ").append(value);
         }
-    }
-
-    private static String str(Object o) {
-        return o == null ? "" : o.toString().strip();
     }
 }

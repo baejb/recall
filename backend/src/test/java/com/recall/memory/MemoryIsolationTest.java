@@ -5,12 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.recall.capture.Capture;
-import com.recall.capture.CaptureRepository;
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.MemoryType;
-import com.recall.common.NotFoundException;
-import com.recall.memory.dto.MemoryPageResponse;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.NotFoundException;
+import com.recall.common.type.MemoryType;
+import com.recall.memory.controller.dto.MemoryPageResponse;
+import com.recall.memory.repository.MemoryRepository;
+import com.recall.memory.service.MemoryService;
+import com.recall.memory.service.entity.Memory;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -75,7 +78,8 @@ class MemoryIsolationTest {
         Memory memory =
                 memoryRepository.save(
                         new Memory(
-                                capture,
+                                capture.getId(),
+                                capture.getUserId(),
                                 MemoryType.KNOWLEDGE,
                                 title,
                                 "{\"title\":\"" + title + "\"}"));

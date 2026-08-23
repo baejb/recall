@@ -5,13 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.recall.capture.Capture;
-import com.recall.capture.CaptureRepository;
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.MemoryType;
-import com.recall.common.NotFoundException;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.NotFoundException;
+import com.recall.common.type.MemoryType;
 import com.recall.memory.type.Verdict;
-import com.recall.review.dto.ReviewItemResponse;
+import com.recall.review.controller.dto.ReviewItemResponse;
+import com.recall.review.repository.ReviewRepository;
+import com.recall.review.service.ReviewService;
+import com.recall.review.service.entity.ReviewItem;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -71,7 +74,8 @@ class ReviewIsolationTest {
         ReviewItem item =
                 reviewRepository.save(
                         new ReviewItem(
-                                capture,
+                                capture.getId(),
+                                capture.getUserId(),
                                 MemoryType.KNOWLEDGE,
                                 Verdict.NEW,
                                 null,
@@ -84,7 +88,7 @@ class ReviewIsolationTest {
     void cleanup() {
         // review_queue 는 capture FK 로 함께 지워진다(TRUNCATE 아닌 delete 경로라 명시 삭제).
         for (ReviewItem item : reviewRepository.findAll()) {
-            if (item.getCapture() != null && captureIds.contains(item.getCapture().getId())) {
+            if (captureIds.contains(item.getCaptureId())) {
                 reviewRepository.delete(item);
             }
         }

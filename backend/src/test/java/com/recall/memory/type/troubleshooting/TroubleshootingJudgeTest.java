@@ -8,14 +8,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.recall.common.MemoryType;
-import com.recall.common.PromptLoader;
+import com.recall.common.prompt.PromptLoader;
 import com.recall.llm.EmbeddingClient;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.type.Judgement;
 import com.recall.memory.type.Verdict;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,20 +24,18 @@ class TroubleshootingJudgeTest {
 
     private static final TroubleshootingJudge JUDGE = new TroubleshootingJudge(new PromptLoader());
 
-    private static final Map<String, Object> PROPOSED =
-            Map.of("title", "컨테이너 OOM", "error_signature", "OOMKilled exit 137");
-    private static final Map<String, Object> EXISTING =
-            Map.of("title", "컨테이너가 죽음", "error_signature", "OOMKilled exit 137");
+    // 판정 입력이 카드 타입이라 필드 이름을 테스트가 문자열로 다시 적지 않는다.
+    private static final TroubleshootingCard PROPOSED = card("컨테이너 OOM");
+    private static final TroubleshootingCard EXISTING = card("컨테이너가 죽음");
+
+    private static TroubleshootingCard card(String title) {
+        return new TroubleshootingCard(
+                title, "", List.of(), "", "", "OOMKilled exit 137", "", List.of(), "", "", null);
+    }
 
     private static UserAiContext ctxWithResponse(String response) {
         LlmClient fake = (system, user) -> response;
         return new UserAiContext(1L, fake, mock(EmbeddingClient.class), true, true);
-    }
-
-    @Test
-    @DisplayName("supports()는 TROUBLESHOOTING")
-    void supports() {
-        assertEquals(MemoryType.TROUBLESHOOTING, JUDGE.supports());
     }
 
     @Test
@@ -47,7 +44,7 @@ class TroubleshootingJudgeTest {
         LlmClient never = mock(LlmClient.class);
         UserAiContext ctx = new UserAiContext(1L, never, mock(EmbeddingClient.class), true, true);
 
-        Judgement j = JUDGE.judge(PROPOSED, Map.of(), ctx);
+        Judgement j = JUDGE.judge(PROPOSED, null, ctx);
 
         assertEquals(Verdict.NEW, j.verdict());
         assertNull(j.targetMemoryId(), "targetMemoryId는 파이프라인이 채운다");

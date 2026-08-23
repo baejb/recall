@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getMemoryDetail, updateMemoryStatus, type MemoryStatus } from '../api/client'
+import {
+  ApiRequestError,
+  getMemoryDetail,
+  updateMemoryStatus,
+  type MemoryStatus,
+} from '../api/client'
 import { readTroubleshootingCard, toTsFields, toTypeKey } from '../api/adapter'
 import type { MemoryDetailResponse } from '../api/dto'
 import { useToast } from '../hooks/useToast'
@@ -57,10 +62,15 @@ export function MemoryDetailPage() {
         setState({ kind: 'ready', detail })
       } catch (e) {
         if (ctrl.signal.aborted) return
-        const message = e instanceof Error ? e.message : '알 수 없는 오류'
-        // client.ts request()의 에러 메시지 포맷: "GET /api/memories/{id} → {status} {detail}"
-        if (message.includes('→ 404')) setState({ kind: 'notfound' })
-        else setState({ kind: 'error', message })
+        // 404(없거나 남의 기억 — 백엔드가 존재를 은닉)는 재시도할 게 아니라 "없는 기억" 화면이다.
+        // 전에는 에러 메시지에서 '→ 404' 문자열을 찾아 판별했는데, 응답 봉투 도입으로 메시지 포맷이
+        // 바뀌자 그 분기가 조용히 죽어 없는 기억이 "다시 시도" 화면으로 보였다. 표시용 메시지 대신
+        // 타입(ApiRequestError.isNotFound)으로 분기한다.
+        if (e instanceof ApiRequestError && e.isNotFound) {
+          setState({ kind: 'notfound' })
+        } else {
+          setState({ kind: 'error', message: e instanceof Error ? e.message : '알 수 없는 오류' })
+        }
       }
     })()
     return () => ctrl.abort()

@@ -3,8 +3,9 @@ package com.recall.settings;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.SecretCipher;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.ValidationException;
+import com.recall.common.secret.SecretCipher;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
@@ -15,6 +16,10 @@ import com.recall.llm.provider.openai.OpenAiChatProvider;
 import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.SettingsService.SettingsUpdate;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.ProviderCatalog;
+import com.recall.settings.service.entity.ModelSetting;
+import com.recall.settings.service.entity.ModelSettingFixture;
 import java.util.Base64;
 import java.util.List;
 import javax.crypto.KeyGenerator;
@@ -70,7 +75,7 @@ class SettingsServiceTest {
                         mock(ApplicationEventPublisher.class),
                         BOOTSTRAP_USER);
         assertThrows(
-                IllegalArgumentException.class,
+                ValidationException.class,
                 () ->
                         svc.update(
                                 new SettingsUpdate(
@@ -110,7 +115,7 @@ class SettingsServiceTest {
     @Test
     void currentChatUsesDbBaseUrlWhenSetElseEnv() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
-        ModelSetting row = new ModelSetting();
+        ModelSetting row = ModelSettingFixture.empty();
         row.setChatProvider("anthropic");
         row.setChatModel("claude-opus-4-8");
         row.setEmbeddingProvider("voyage");
@@ -141,7 +146,7 @@ class SettingsServiceTest {
     @Test
     void updatePersistsChatBaseUrlAndClearsWithBlank() throws Exception {
         ModelSettingRepository repo = mock(ModelSettingRepository.class);
-        ModelSetting row = new ModelSetting();
+        ModelSetting row = ModelSettingFixture.empty();
         row.setChatProvider("anthropic");
         row.setChatModel("claude-opus-4-8");
         row.setEmbeddingProvider("voyage");
