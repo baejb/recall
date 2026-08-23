@@ -39,7 +39,31 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	// llm-eval 태그는 실제 provider 를 호출한다(API 키 필요·비용 발생·비결정적) → 기본 test 와 CI 에서 제외.
+	// PR 마다 돌리면 진짜 회귀가 아닌 이유로(모델 출력 변동) 빨개지고, 그 소음이 게이트를 무력화한다.
+	useJUnitPlatform {
+		excludeTags 'llm-eval'
+	}
+}
+
+// 🔵 LLM 품질 Eval 만 실행: ./gradlew llmEval
+// 실제 provider 를 호출해 단계별 품질을 라벨셋으로 채점한다(PRD §7 — C 유형 라우팅·S2 추출·S4 판정).
+// 프롬프트를 고친 직후에 사람이 돌린다. 키는 env 로: RECALL_LLM_PROVIDER·RECALL_LLM_API_KEY·RECALL_LLM_MODEL_STRONG.
+// 키가 없으면 각 테스트가 assumption 으로 스킵된다(실패가 아니라 "안 돌았음"으로 드러난다).
+tasks.register('llmEval', Test) {
+	description = 'LLM 품질 Eval(🔵) — 실제 provider 호출. 키 없으면 스킵'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'llm-eval'
+	}
+	// 모델 응답을 그대로 봐야 채점 결과를 해석할 수 있다.
+	testLogging {
+		showStandardStreams = true
+		events 'passed', 'skipped', 'failed'
+	}
+	outputs.upToDateWhen { false } // 같은 입력이어도 모델 출력이 달라지므로 캐시하지 않는다.
 }
 
 // 🔴 릴리스 차단 게이트만 실행: ./gradlew releaseGate

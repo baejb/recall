@@ -12,8 +12,12 @@ import org.springframework.stereotype.Service;
  *
  * <p>가리는 값은 <b>버린다</b>(복원용 원문을 남기지 않음 = fail-safe). {@code masked_spans}에는 어디를·무엇을 가렸는지 {@code
  * {start,end,type}}만 기록한다(UI 하이라이트·검토용). 범위(핵심):
- * API키·토큰(OpenAI·Anthropic·GitHub·AWS·Google·Slack·JWT·Bearer·PEM), {@code KEY=VALUE} 시크릿, 이메일. 🔴
- * 릴리스 차단 게이트: 시크릿 잔존 0(PRD §Eval).
+ * API키·토큰(OpenAI·Anthropic·GitHub·AWS·Google·Slack·JWT·Bearer·PEM), {@code KEY=VALUE} 시크릿(한국어 키 이름
+ * 포함), 이메일. 🔴 릴리스 차단 게이트: 시크릿 잔존 0(PRD §Eval).
+ *
+ * <p>커버 범위는 라벨셋으로 고정한다 — {@code src/test/resources/eval/masking-m0.json} 의 케이스가 게이트이고, 아직 못 가리는 모양은
+ * {@code masking-gaps.json} 에 케이스로 남아 있다(왜 남겼는지는 {@code docs/eval.md}). 패턴을 고칠 때는 케이스를 옮기는 것으로 범위
+ * 변화를 드러낸다.
  */
 @Service
 public class MaskingService {
@@ -48,9 +52,14 @@ public class MaskingService {
                     new Rule(Pattern.compile("xox[baprs]-[A-Za-z0-9-]{10,}"), "⟨TOKEN⟩"),
                     new Rule(Pattern.compile("(?i)(Bearer)\\s+[A-Za-z0-9._-]{16,}"), "$1 ⟨TOKEN⟩"),
                     // KEY=VALUE: 값만 가리고 키 이름은 남긴다. 값 문자군에서 ⟨⟩ 제외 → 이미 마스킹된 값은 다시 건드리지 않음.
+                    //
+                    // 키 이름 목록에 한국어(비밀번호·암호·토큰)를 넣는 이유: 이 제품의 원문은 한국어 대화다.
+                    // 영어 키 이름만 보면 "비밀번호: hunter2" 가 그대로 외부 LLM·인덱스로 나간다(🔴 유출).
+                    // `pass` 는 `db_pass=` 같은 축약 키를 잡되 `(?![a-z])` 로 passing/passed 를 배제한다 —
+                    // 그게 없으면 `passing=true` 의 값까지 가려 원문이 읽을 수 없게 된다(거짓 양성).
                     new Rule(
                             Pattern.compile(
-                                    "(?i)([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key|client[_-]?secret|apikey)[A-Za-z0-9_.-]*)(\\s*[:=]\\s*\"?)([^\\s\"'⟨⟩]+)"),
+                                    "(?i)([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd|pass(?![a-z])|access[_-]?key|client[_-]?secret|apikey|비밀번호|암호|토큰)[A-Za-z0-9_.-]*)(\\s*[:=]\\s*\"?)([^\\s\"'⟨⟩]+)"),
                             "$1$2⟨SECRET⟩"),
                     new Rule(
                             Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"),
