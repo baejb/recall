@@ -1,16 +1,16 @@
 package com.recall.memory.type.knowledge;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.recall.common.MemoryType;
-import com.recall.common.PromptLoader;
+import com.recall.common.prompt.LlmJson;
+import com.recall.common.prompt.PromptLoader;
+import com.recall.common.type.MemoryType;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.type.ExtractionStrategy;
+import com.recall.memory.type.MemoryCard;
 import java.util.List;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -52,9 +52,15 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     }
 
     @Override
-    public Map<String, Object> extract(String maskedText, UserAiContext ctx) {
-        KnowledgeCard card = extractCard(maskedText, ctx.requireChat());
-        return objectMapper.convertValue(card, new TypeReference<Map<String, Object>>() {});
+    public Class<? extends MemoryCard> cardType() {
+        return KnowledgeCard.class;
+    }
+
+    @Override
+    public MemoryCard extract(String maskedText, UserAiContext ctx) {
+        // 카드를 Map 으로 눌러 반환하지 않는다 — 경계가 Map 이면 타입 안전성이 이 패키지 밖에서 끊기고,
+        // 읽는 쪽(memory·review·query 모듈)이 필드 이름을 문자열로 다시 적게 된다.
+        return extractCard(maskedText, ctx.requireChat());
     }
 
     private KnowledgeCard extractCard(String maskedText, LlmClient llmClient) {
@@ -66,7 +72,7 @@ public class KnowledgeExtraction implements ExtractionStrategy {
             return fallback(maskedText);
         }
 
-        String json = extractJsonObject(raw);
+        String json = LlmJson.extractObject(raw);
         if (json == null) {
             log.warn("LLM 응답에서 JSON을 찾지 못함 → fallback (응답: {})", preview(raw));
             return fallback(maskedText);
@@ -90,16 +96,6 @@ public class KnowledgeExtraction implements ExtractionStrategy {
     private KnowledgeCard withTitle(KnowledgeCard card, String title) {
         return new KnowledgeCard(
                 title, card.summary(), card.keywords(), card.facts(), card.document());
-    }
-
-    /** 응답 텍스트에서 첫 '{'~마지막 '}' 구간만 잘라 JSON 본문 후보를 얻는다(모델이 산문/마크다운으로 감싸도 견딤). */
-    private String extractJsonObject(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        int start = raw.indexOf('{');
-        int end = raw.lastIndexOf('}');
-        return (start >= 0 && end > start) ? raw.substring(start, end + 1) : null;
     }
 
     private String deriveTitle(String maskedText) {

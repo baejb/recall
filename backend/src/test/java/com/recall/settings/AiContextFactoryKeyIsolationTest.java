@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.recall.common.SecretCipher;
+import com.recall.common.secret.SecretCipher;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
@@ -21,6 +21,10 @@ import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.openai.OpenAiLlmClient;
 import com.recall.llm.provider.voyage.VoyageEmbeddingClient;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.ProviderCatalog;
+import com.recall.settings.service.entity.ModelSetting;
+import com.recall.settings.service.entity.ModelSettingFixture;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -57,7 +61,7 @@ class AiContextFactoryKeyIsolationTest {
     void forUserBindsEachUserToOwnProviderAndKey() throws Exception {
         SecretCipher cipher = realCipher();
 
-        ModelSetting rowA = new ModelSetting();
+        ModelSetting rowA = ModelSettingFixture.empty();
         rowA.setChatProvider("anthropic");
         rowA.setChatModel("claude-opus-4-8");
         rowA.setChatApiKeyEnc(cipher.encrypt("sk-user-a-chat"));
@@ -66,7 +70,7 @@ class AiContextFactoryKeyIsolationTest {
         rowA.setEmbeddingApiKeyEnc(cipher.encrypt("sk-user-a-embedding"));
         rowA.setEmbeddingStatus("READY");
 
-        ModelSetting rowB = new ModelSetting();
+        ModelSetting rowB = ModelSettingFixture.empty();
         rowB.setChatProvider("openai");
         rowB.setChatModel("gpt-4.1");
         rowB.setChatApiKeyEnc(cipher.encrypt("sk-user-b-chat"));

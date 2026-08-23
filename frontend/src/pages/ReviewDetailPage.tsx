@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useRecall } from '../hooks/useRecall'
 import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
-import { StatusPill } from '../components/StatusPill'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
+import { TroubleshootingCardView } from '../components/TroubleshootingCardView'
 import { CaptureRawView } from '../components/CaptureRawView'
 
 export function ReviewDetailPage() {
@@ -73,18 +73,7 @@ export function ReviewDetailPage() {
             </div>
             <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>{c.title}</div>
             {c.type === 'ts' ? (
-              <div className="kv">
-                <div className="k">문제</div>
-                <div className="v">{c.ts.problem}</div>
-                <div className="k">시도</div>
-                <div className="v">{c.ts.tried || '(없음)'}</div>
-                <div className="k">해결</div>
-                <div className="v hi">{c.ts.solution || '(아직 없음)'}</div>
-                <div className="k">상태</div>
-                <div className="v">
-                  <StatusPill status={c.ts.status} />
-                </div>
-              </div>
+              <TroubleshootingCardView fields={c.ts} />
             ) : (
               <KnowledgeCardView
                 summary={c.kn.summary}

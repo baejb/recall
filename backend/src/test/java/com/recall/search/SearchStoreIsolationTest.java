@@ -3,13 +3,12 @@ package com.recall.search;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.recall.capture.Capture;
-import com.recall.capture.CaptureRepository;
-import com.recall.common.MemoryType;
-import com.recall.memory.Memory;
-import com.recall.memory.MemoryRepository;
-import com.recall.memory.MemorySearchStore;
-import com.recall.memory.ScoredMemory;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.type.MemoryType;
+import com.recall.memory.repository.MemoryRepository;
+import com.recall.memory.service.entity.Memory;
+import com.recall.search.repository.MemorySearchStore;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -70,7 +69,12 @@ class SearchStoreIsolationTest {
         captureIds.add(capture.getId());
         Memory memory =
                 memoryRepository.save(
-                        new Memory(capture, MemoryType.KNOWLEDGE, SHARED_KEYWORD, "{}"));
+                        new Memory(
+                                capture.getId(),
+                                capture.getUserId(),
+                                MemoryType.KNOWLEDGE,
+                                SHARED_KEYWORD,
+                                "{}"));
         long memoryId = memory.getId();
         // BM25 tsv + 벡터 지문을 채워 두 채널 모두 매치되게 한다.
         searchStore.updateSearchTsv(memoryId, SHARED_KEYWORD);

@@ -1,6 +1,6 @@
 package com.recall.memory.type;
 
-import com.recall.common.TypeStrategy;
+import com.recall.common.type.TypeStrategy;
 import java.util.Map;
 
 /**
@@ -9,6 +9,11 @@ import java.util.Map;
  */
 public interface PlanContribution extends TypeStrategy {
 
-    /** 채널명 → 가중치. 예: {@code {"exact": 3.0, "raw_bm25": 2.0, "memory_vector": 1.2}}. */
-    Map<String, Double> channelWeights();
+    /**
+     * 채널 → 가중치. 예: {@code {MEMORY_BM25: 2.0, MEMORY_VECTOR: 1.2}}.
+     *
+     * <p>키가 {@link SearchChannel} enum 인 이유는 그 타입의 javadoc 에 있다 — 문자열 키였을 때 채널 이름 오타가 {@code
+     * RrfFusion}의 {@code getOrDefault(1.0)}에 조용히 삼켜져 가중치 설계가 무효화됐다.
+     */
+    Map<SearchChannel, Double> channelWeights();
 }

@@ -7,16 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
-import com.recall.capture.Capture;
-import com.recall.capture.CaptureRepository;
-import com.recall.common.MemoryType;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.common.type.MemoryType;
 import com.recall.llm.AiContextFactory;
 import com.recall.llm.LlmClient;
 import com.recall.llm.StubEmbeddingClient;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.Memory;
-import com.recall.memory.MemoryRepository;
+import com.recall.memory.repository.MemoryRepository;
+import com.recall.memory.service.entity.Memory;
 import com.recall.memory.type.Verdict;
+import com.recall.review.repository.ReviewRepository;
+import com.recall.review.service.ReviewService;
+import com.recall.review.service.entity.ReviewItem;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -86,7 +89,8 @@ class ConflictOverwriteGateTest {
         // 기존 기억(포트=8080)
         Memory existing =
                 new Memory(
-                        c,
+                        c.getId(),
+                        c.getUserId(),
                         MemoryType.KNOWLEDGE,
                         "기존 사실: 포트는 8080",
                         "{\"title\":\"기존 사실\",\"facts\":[\"포트는 8080\"]}");
@@ -97,10 +101,11 @@ class ConflictOverwriteGateTest {
         // 모순 후보(포트=9090)를 기존 기억 대상으로 CONFLICT 판정된 검토 항목
         ReviewItem item =
                 new ReviewItem(
-                        c,
+                        c.getId(),
+                        c.getUserId(),
                         MemoryType.KNOWLEDGE,
                         Verdict.CONFLICT,
-                        existing,
+                        existing.getId(),
                         "포트 값이 기존과 충돌",
                         "{\"title\":\"새 사실\",\"facts\":[\"포트는 9090\"]}");
         reviewRepository.saveAndFlush(item);

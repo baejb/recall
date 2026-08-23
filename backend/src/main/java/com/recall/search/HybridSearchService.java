@@ -1,18 +1,18 @@
 package com.recall.search;
 
-import com.recall.common.MemoryType;
-import com.recall.common.StrategyRegistry;
+import com.recall.common.type.MemoryType;
+import com.recall.common.type.StrategyRegistry;
 import com.recall.llm.UserAiContext;
-import com.recall.memory.Memory;
-import com.recall.memory.MemoryRepository;
-import com.recall.memory.MemorySearchStore;
-import com.recall.memory.ScoredMemory;
+import com.recall.memory.MemoryAccess;
+import com.recall.memory.StoredMemory;
 import com.recall.memory.type.PlanContribution;
+import com.recall.memory.type.SearchChannel;
+import com.recall.search.repository.MemorySearchStore;
+import com.recall.search.service.RrfFusion;
+import com.recall.settings.EmbeddingStatus;
 import com.recall.settings.SettingsService;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,27 +29,24 @@ public class HybridSearchService {
     /** 채널별로 융합 전에 가져올 후보 수. */
     private static final int CHANNEL_K = 20;
 
-    /**
-     * 벡터 채널이 안전한 유일한 임베딩 상태. REINDEXING(신구 모델 혼재)뿐 아니라 FAILED(재색인이 중간에 실패해 memory_embedding 이 신구 모델
-     * 벡터가 섞인 채로 남음)도 벡터 공간이 일관되지 않아 격하 대상이다(불변 원칙: 조용한 실패 금지 — 상태로 동작을 바꾼다).
-     */
-    private static final String STATUS_READY = "READY";
-
-    private static final String CH_VECTOR = "memory_vector";
-    private static final String CH_BM25 = "memory_bm25";
+    // 벡터 채널이 안전한 유일한 임베딩 상태는 EmbeddingStatus.READY 다. REINDEXING(신구 모델 혼재)뿐 아니라
+    // FAILED(재색인이 중간에 실패해 memory_embedding 에 신구 모델 벡터가 섞인 채로 남음)도 벡터 공간이 일관되지
+    // 않아 격하 대상이다(불변 원칙: 조용한 실패 금지 — 상태로 동작을 바꾼다).
+    // 그 어휘는 컬럼을 소유한 settings 도메인의 EmbeddingStatus 가 갖는다 — 전엔 이 서비스가 자기 private
+    // 상수를 들고 있어서, 같은 어휘를 쓰는 세 모듈(settings·search·여기)이 각자 리터럴을 갖고 있었다.
 
     private final MemorySearchStore store;
-    private final MemoryRepository memoryRepository;
+    private final MemoryAccess memories;
     private final StrategyRegistry<PlanContribution> plans;
     private final SettingsService settings;
 
     public HybridSearchService(
             MemorySearchStore store,
-            MemoryRepository memoryRepository,
+            MemoryAccess memories,
             List<PlanContribution> planContributions,
             SettingsService settings) {
         this.store = store;
-        this.memoryRepository = memoryRepository;
+        this.memories = memories;
         this.plans = new StrategyRegistry<>(planContributions);
         this.settings = settings;
     }
@@ -62,15 +59,21 @@ public class HybridSearchService {
      * 혼재)·FAILED(재색인 중간 실패로 신구 모델 벡터 혼재)면 격하. 벡터 채널은 {@code ctx}에 바인딩된 {@link
      * com.recall.llm.EmbeddingClient}만 쓴다(주입된 전역 싱글턴 아님) — 사용자별 provider/키 교차유출 방지.
      */
-    public List<Memory> search(String question, MemoryType type, UserAiContext ctx) {
+    public List<StoredMemory> search(String question, MemoryType type, UserAiContext ctx) {
         long userId = ctx.userId();
         boolean vectorReady =
-                ctx.embeddingReady() && STATUS_READY.equals(settings.embeddingStatus(userId));
+                ctx.embeddingReady()
+                        && EmbeddingStatus.READY.equals(settings.embeddingStatus(userId));
         List<Long> vectorIds = vectorReady ? vectorChannel(question, type, ctx) : List.of();
         List<Long> bm25Ids = ids(store.searchByKeyword(userId, question, type, CHANNEL_K));
 
-        Map<String, List<Long>> ranked = Map.of(CH_VECTOR, vectorIds, CH_BM25, bm25Ids);
-        Map<String, Double> weights = plans.get(type).channelWeights();
+        // 채널 키가 enum 이라 전략이 준 가중치 키와 여기서 만드는 순위 키가 어긋날 수 없다 — 전에는 양쪽이
+        // 각자 문자열 리터럴을 갖고 있어, 이름이 하나만 틀려도 RrfFusion 이 조용히 1.0 으로 격하했다.
+        Map<SearchChannel, List<Long>> ranked =
+                Map.of(
+                        SearchChannel.MEMORY_VECTOR, vectorIds,
+                        SearchChannel.MEMORY_BM25, bm25Ids);
+        Map<SearchChannel, Double> weights = plans.get(type).channelWeights();
         List<Long> fused = RrfFusion.fuse(ranked, weights);
         return loadInOrder(fused);
     }
@@ -95,14 +98,13 @@ public class HybridSearchService {
         return scored.stream().map(ScoredMemory::memoryId).toList();
     }
 
-    /** 융합 순위를 유지한 채 memory 엔티티를 로드한다(findAllById는 순서를 보장하지 않음). */
-    private List<Memory> loadInOrder(List<Long> ids) {
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-        Map<Long, Memory> byId =
-                memoryRepository.findAllById(ids).stream()
-                        .collect(Collectors.toMap(Memory::getId, m -> m));
-        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+    /**
+     * 융합 순위를 유지한 채 카드를 로드한다.
+     *
+     * <p>순서 유지는 memory 모듈의 계약({@code byIdsInOrder})이 보장한다 — 전에는 이 서비스가 남의 리포지토리를 직접 잡고 {@code
+     * findAllById} 의 순서 미보장을 여기서 손으로 되돌렸다. 그 보정은 조회를 소유한 쪽에 있어야, 다른 호출자가 같은 함정을 다시 밟지 않는다.
+     */
+    private List<StoredMemory> loadInOrder(List<Long> ids) {
+        return ids.isEmpty() ? List.of() : memories.byIdsInOrder(ids);
     }
 }

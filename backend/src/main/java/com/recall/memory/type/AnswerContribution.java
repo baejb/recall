@@ -1,7 +1,6 @@
 package com.recall.memory.type;
 
-import com.recall.common.TypeStrategy;
-import java.util.Map;
+import com.recall.common.type.TypeStrategy;
 
 /**
  * A(Answer Composer)의 유형별 기여 — 답변 형식은 유형 × query_intent 로 변하므로, 공유 Composer가 intent(회상/비교 등)를 처리하고
@@ -11,6 +10,6 @@ import java.util.Map;
  */
 public interface AnswerContribution extends TypeStrategy {
 
-    /** memory 구조화 필드 → 답변에 넣을 근거·필드 조각(citation 대상 포함). */
-    String render(Map<String, Object> memory);
+    /** 카드 → 답변에 넣을 근거·필드 조각(citation 대상 포함). */
+    String render(MemoryCard card);
 }

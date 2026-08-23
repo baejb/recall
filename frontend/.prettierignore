@@ -1,3 +1,5 @@
 dist
 node_modules
 .vite
+# 규칙 문서는 포맷터 대상이 아니다 — prettier 가 마크다운 강조 표기(*x* → _x_)를 바꿔버린다.
+CLAUDE.md

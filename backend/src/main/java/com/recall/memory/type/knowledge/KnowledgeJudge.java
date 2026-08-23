@@ -2,13 +2,16 @@ package com.recall.memory.type.knowledge;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.recall.common.MemoryType;
-import com.recall.common.PromptLoader;
+import com.recall.common.prompt.LlmJson;
+import com.recall.common.prompt.PromptLoader;
+import com.recall.common.type.MemoryType;
 import com.recall.llm.LlmClient;
 import com.recall.llm.UserAiContext;
 import com.recall.memory.type.Judgement;
+import com.recall.memory.type.MemoryCard;
 import com.recall.memory.type.SimilarityJudgeStrategy;
 import com.recall.memory.type.Verdict;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +47,10 @@ public class KnowledgeJudge implements SimilarityJudgeStrategy {
     }
 
     @Override
-    public Judgement judge(
-            Map<String, Object> proposed, Map<String, Object> existing, UserAiContext ctx) {
-        if (existing == null || existing.isEmpty()) {
+    public Judgement judge(MemoryCard proposed, MemoryCard existing, UserAiContext ctx) {
+        // "후보 없음"은 빈 카드가 아니라 null 로 온다 — 전엔 빈 Map 과 값 없는 카드를 같은 값으로 표현해
+        // 구현마다 (null || isEmpty()) 검사를 다시 써야 했다.
+        if (existing == null) {
             // 유사 후보 자체가 없으면 LLM을 부를 필요가 없다 — ctx.requireChat()도 호출하지 않는다.
             return new Judgement(Verdict.NEW, null, "유사한 기존 기억 없음");
         }
@@ -63,7 +67,7 @@ public class KnowledgeJudge implements SimilarityJudgeStrategy {
     }
 
     private Judgement parseJudgement(String raw) {
-        String json = extractJsonObject(raw);
+        String json = LlmJson.extractObject(raw);
         if (json == null) {
             log.warn("LLM 판정 응답에서 JSON을 찾지 못함 → fallback");
             return fallback();
@@ -96,29 +100,19 @@ public class KnowledgeJudge implements SimilarityJudgeStrategy {
             return null;
         }
         try {
-            return Verdict.valueOf(value.strip().toUpperCase());
+            return Verdict.valueOf(value.strip().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
 
-    private String toUserPrompt(Map<String, Object> proposed, Map<String, Object> existing) {
+    private String toUserPrompt(MemoryCard proposed, MemoryCard existing) {
         try {
             return objectMapper.writeValueAsString(
                     Map.of("proposed", proposed, "existing", existing));
         } catch (Exception e) {
             throw new IllegalStateException("판정 입력 직렬화 실패", e);
         }
-    }
-
-    /** 응답 텍스트에서 첫 '{'~마지막 '}' 구간만 잘라 JSON 본문 후보를 얻는다(산문/마크다운으로 감싸도 견딤). */
-    private String extractJsonObject(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        int start = raw.indexOf('{');
-        int end = raw.lastIndexOf('}');
-        return (start >= 0 && end > start) ? raw.substring(start, end + 1) : null;
     }
 
     /** LLM 판정 응답(필요 필드만). */

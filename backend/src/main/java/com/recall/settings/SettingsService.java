@@ -1,20 +1,27 @@
 package com.recall.settings;
 
-import com.recall.common.BadRequestException;
-import com.recall.common.BootstrapCurrentUserProvider;
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.SecretCipher;
-import com.recall.common.SecretMasking;
+import com.recall.common.config.BootstrapCurrentUserProvider;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.UpstreamUnavailableException;
+import com.recall.common.exception.ValidationException;
+import com.recall.common.secret.SecretCipher;
+import com.recall.common.secret.SecretMasking;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
-import com.recall.settings.ProviderCatalog.Role;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.EmbeddingProbeException;
+import com.recall.settings.service.ProviderCatalog;
+import com.recall.settings.service.ProviderCatalog.Role;
+import com.recall.settings.service.entity.ModelSetting;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
@@ -164,6 +171,23 @@ public class SettingsService {
         row(currentUser.currentUserId()).setEmbeddingStatus(status);
     }
 
+    /**
+     * 세대(generation) 토큰이 <b>아직 현재일 때만</b> embedding_status 를 쓴다.
+     *
+     * <p>재색인 잡의 <b>펜싱</b>이다: 임베딩 설정을 연달아 바꾸면 잡이 여러 개 생기고, 뒤늦게 끝난 앞선 잡이 상태를 쓰면 반쯤 재색인된(모델 혼재) 인덱스가
+     * {@code READY} 로 보인다. 조건부 UPDATE 로 마지막 잡만 쓰게 만든다.
+     *
+     * <p><b>왜 여기에 있나</b> — 재색인은 search 의 일이지만 {@code model_setting} 은 settings 의 테이블이다. 전에는 {@code
+     * ReindexService} 가 {@code ModelSettingRepository} 를 직접 잡아 이 조건부 UPDATE 를 남의 모듈에서 실행했다. 그러면 "이
+     * 컬럼을 어떤 조건으로 쓸 수 있는가"라는 규칙이 컬럼 소유자 밖에 놓인다.
+     *
+     * @return 실제로 쓰인 행 수(0 이면 더 새로운 세대가 이미 있다 — 뒤처진 잡)
+     */
+    @Transactional
+    public int setEmbeddingStatusIfGeneration(long userId, String status, long generation) {
+        return repository.updateEmbeddingStatusIfGeneration(userId, status, generation);
+    }
+
     @Transactional
     public UpdateResult update(SettingsUpdate u) {
         long userId = currentUser.currentUserId();
@@ -182,7 +206,7 @@ public class SettingsService {
             // P1-d: 옛 키는 옛 provider 것 — provider 교체 시 반드시 새 키를 받아야 한다.
             // 없으면 옛 키+새 provider 조합으로 나중에 캡처 추출 등에서 조용히 실패한다.
             if (chatProviderChanged && !notBlank(u.chatApiKey())) {
-                throw new BadRequestException("chat provider 변경에는 새 API 키가 필요합니다");
+                throw new ValidationException("chat provider 변경에는 새 API 키가 필요합니다");
             }
             s.setChatProvider(u.chatProvider());
         }
@@ -230,7 +254,7 @@ public class SettingsService {
         if (reindexNeeded) {
             String effectiveKey = resolveEmbeddingKey(userId, s.getEmbeddingApiKeyEnc());
             if (!notBlank(effectiveKey)) {
-                throw new BadRequestException("임베딩 provider/모델 변경에는 유효한 API 키가 필요합니다 (기존 벡터 보호)");
+                throw new ValidationException("임베딩 provider/모델 변경에는 유효한 API 키가 필요합니다 (기존 벡터 보호)");
             }
         }
 
@@ -248,7 +272,7 @@ public class SettingsService {
             // 배경에서 수행하며, 이 세대 토큰을 들고 돌아 뒤늦은 앞선 잡의 상태 덮어쓰기를 막는다(순환 회피).
             long gen = s.getEmbeddingGeneration() + 1;
             s.setEmbeddingGeneration(gen);
-            s.setEmbeddingStatus("REINDEXING");
+            s.setEmbeddingStatus(EmbeddingStatus.REINDEXING);
             publisher.publishEvent(new EmbeddingModelChangedEvent(userId, gen));
         }
 
@@ -266,15 +290,28 @@ public class SettingsService {
         } catch (EmbeddingProbeException e) {
             throw e;
         } catch (RestClientResponseException e) {
-            throw new EmbeddingProbeException(
-                    "임베딩 설정 검증 실패(키·모델·base URL 확인): HTTP "
-                            + e.getStatusCode().value()
-                            + " "
-                            + e.getStatusText());
+            // provider 가 응답은 했다 — 그 응답이 "네 요청이 잘못됐다"(4xx)인지 "내가 지금 고장났다"(5xx)인지에
+            // 따라 사용자가 할 일이 정반대다. 전에는 둘을 하나로 뭉개 전부 400 으로 답해서, provider 가 잠깐
+            // 죽은 동안 정상 설정을 저장하려는 사용자에게 "키·모델을 확인하라"고 틀린 안내를 했다.
+            throw e.getStatusCode().is5xxServerError()
+                    ? new UpstreamUnavailableException(providerFailure("provider 오류", e))
+                    : new EmbeddingProbeException(
+                            providerFailure("임베딩 설정 검증 실패(키·모델·base URL 확인)", e));
+        } catch (ResourceAccessException e) {
+            // 연결 자체가 안 됐다(타임아웃·DNS·TLS) — 응답이 없으니 입력 검증 결과로 읽을 수 없다.
+            throw new UpstreamUnavailableException(
+                    SecretMasking.mask("임베딩 provider 에 연결할 수 없음: " + e.getMessage()));
         } catch (Exception e) {
-            throw new EmbeddingProbeException(
-                    SecretMasking.mask("임베딩 설정 검증 실패(키·모델·base URL 확인): " + e.getMessage()));
+            // 나머지는 우리 클라이언트 코드의 결함일 수 있으므로 검증 실패로 단정하지 않는다.
+            // 사용자에게 "입력을 고쳐라"라고 잘못 안내하는 쪽보다, 상류/서버 문제로 드러내는 쪽이 안전하다.
+            throw new UpstreamUnavailableException(
+                    SecretMasking.mask("임베딩 설정 검증 중 오류: " + e.getMessage()));
         }
+    }
+
+    /** provider 실패 메시지 — 상태 코드·상태 문구까지만 담는다(응답 바디·키는 담지 않는다). */
+    private static String providerFailure(String prefix, RestClientResponseException e) {
+        return prefix + ": HTTP " + e.getStatusCode().value() + " " + e.getStatusText();
     }
 
     private String encrypt(String plaintext) {
@@ -292,7 +329,7 @@ public class SettingsService {
     /** 비어 있지 않은 base-url 은 https 스킴만 허용한다(null=변경 없음, ""=해제는 통과). */
     private static void requireHttpsOrBlank(String baseUrl) {
         if (notBlank(baseUrl) && !baseUrl.startsWith("https://")) {
-            throw new BadRequestException("base URL 은 https 스킴만 허용됩니다");
+            throw new ValidationException("base URL 은 https 스킴만 허용됩니다");
         }
     }
 
@@ -303,7 +340,7 @@ public class SettingsService {
      * 혼용이지만 지원되는 provider 에서 잠재 NPE 방지).
      */
     private static String defaultModel(Map<String, List<String>> models, String provider) {
-        return models.get(provider.toLowerCase()).get(0);
+        return models.get(provider.toLowerCase(Locale.ROOT)).get(0);
     }
 
     /** DB 값이 있으면 그대로, 없으면(공백/널) env 폴백. 둘 다 공백이면 널이 되어 클라이언트가 provider 기본 URL 을 쓴다. */

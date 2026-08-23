@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.recall.common.CurrentUserProvider;
-import com.recall.common.SecretCipher;
+import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.secret.SecretCipher;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.EmbeddingProperties;
 import com.recall.llm.LlmProperties;
@@ -16,6 +16,10 @@ import com.recall.llm.provider.openai.OpenAiChatProvider;
 import com.recall.llm.provider.openai.OpenAiEmbeddingProvider;
 import com.recall.llm.provider.voyage.VoyageEmbeddingProvider;
 import com.recall.settings.SettingsService.SettingsUpdate;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.ProviderCatalog;
+import com.recall.settings.service.entity.ModelSetting;
+import com.recall.settings.service.entity.ModelSettingFixture;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +36,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * userId 를 실을 자리가 애초에 없다(교차유출 스푸핑 자체가 구조적으로 불가능). 이 테스트는 그 스코프 해석이 실제로 사용자마다 올바르게 갈리는지(항상 같은 행으로 새지
  * 않는지) 회귀로 고정한다.
  *
- * <p>{@code RECALL_SECRET_KEY} 환경변수·실 DB 에 의존하지 않도록, {@link SettingsServiceTest}와 동일하게 자체 생성한
+ * <p>{@code RECALL_SECRET_KEY} 환경변수·실 DB 에 의존하지 않도록, {@code SettingsServiceTest}와 동일하게 자체 생성한
  * {@link SecretCipher} + mock {@link ModelSettingRepository}로 {@code SettingsService}를 직접 구성하고,
  * {@link CurrentUserProvider}는 테스트 중 자유롭게 스위칭 가능한 가변 값으로 대체한다.
  */
@@ -63,14 +67,14 @@ class SettingsIsolationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        rowA = new ModelSetting();
+        rowA = ModelSettingFixture.empty();
         rowA.setChatProvider("anthropic");
         rowA.setChatModel("claude-opus-4-8");
         rowA.setEmbeddingProvider("voyage");
         rowA.setEmbeddingModel("voyage-3");
         rowA.setEmbeddingStatus("READY");
 
-        rowB = new ModelSetting();
+        rowB = ModelSettingFixture.empty();
         rowB.setChatProvider("openai");
         rowB.setChatModel("gpt-4.1");
         rowB.setChatBaseUrl("https://b-initial.example");

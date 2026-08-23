@@ -3,7 +3,7 @@ package com.recall.settings;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.recall.common.BootstrapCurrentUserProvider;
+import com.recall.common.config.BootstrapCurrentUserProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

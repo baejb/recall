@@ -3,10 +3,11 @@ package com.recall.store;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import com.recall.capture.Capture;
 import com.recall.capture.CaptureCreatedEvent;
-import com.recall.capture.CaptureRepository;
-import com.recall.review.ReviewRepository;
+import com.recall.capture.repository.CaptureRepository;
+import com.recall.capture.service.entity.Capture;
+import com.recall.review.repository.ReviewRepository;
+import com.recall.store.service.StorePipeline;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -75,10 +76,7 @@ class StoreContextIsolationTest {
 
         boolean anyReview =
                 reviewRepository.findAll().stream()
-                        .anyMatch(
-                                i ->
-                                        i.getCapture() != null
-                                                && capture.getId().equals(i.getCapture().getId()));
+                        .anyMatch(i -> capture.getId().equals(i.getCaptureId()));
         assertFalse(anyReview, "context 게이트 실패 시 부분 검토 항목이 새면 안 된다(승인 게이트)");
     }
 

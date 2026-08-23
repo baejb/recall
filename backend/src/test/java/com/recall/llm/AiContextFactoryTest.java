@@ -3,7 +3,7 @@ package com.recall.llm;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.recall.common.AiNotConfiguredException;
+import com.recall.common.exception.AiNotConfiguredException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

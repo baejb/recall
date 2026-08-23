@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recall.llm.EmbeddingClientFactory;
 import com.recall.llm.StubEmbeddingClient;
+import com.recall.settings.repository.ModelSettingRepository;
+import com.recall.settings.service.entity.ModelSetting;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,22 +103,22 @@ class SettingsFlowSmokeTest {
         String getBody =
                 mockMvc.perform(get("/api/settings/models"))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.chat.provider").value("anthropic"))
-                        .andExpect(jsonPath("$.embedding.provider").value("voyage"))
-                        .andExpect(jsonPath("$.embedding.status").value("READY"))
+                        .andExpect(jsonPath("$.data.chat.provider").value("anthropic"))
+                        .andExpect(jsonPath("$.data.embedding.provider").value("voyage"))
+                        .andExpect(jsonPath("$.data.embedding.status").value("READY"))
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
-        JsonNode getJson = mapper.readTree(getBody);
+        JsonNode getJson = mapper.readTree(getBody).path("data");
         assertTrue(getJson.has("embedding"), "embedding 슬롯이 응답에 있어야 한다");
 
         // 2) 역할별 provider 카탈로그 — capability 비대칭 확인
         mockMvc.perform(get("/api/settings/models/catalog"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.embeddingModels.anthropic").doesNotExist())
-                .andExpect(jsonPath("$.chatModels.voyage").doesNotExist())
-                .andExpect(jsonPath("$.chatModels.anthropic").exists())
-                .andExpect(jsonPath("$.embeddingModels.voyage").exists());
+                .andExpect(jsonPath("$.data.embeddingModels.anthropic").doesNotExist())
+                .andExpect(jsonPath("$.data.chatModels.voyage").doesNotExist())
+                .andExpect(jsonPath("$.data.chatModels.anthropic").exists())
+                .andExpect(jsonPath("$.data.embeddingModels.voyage").exists());
 
         // 3) 임베딩 provider 변경 → 재색인 트리거. P1-b 로 유효 키가 필수인데, env 키를 주입해 요건을 만족하므로
         //    요청 바디의 apiKey 는 null 로 둔다(팩토리는 MockitoBean 이라 실제 provider 로 나가지 않는다).
@@ -129,7 +131,7 @@ class SettingsFlowSmokeTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(requestBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.embedding.provider").value("openai"));
+                .andExpect(jsonPath("$.data.embedding.provider").value("openai"));
 
         // 4) 비동기 재색인이 완료되어 상태가 READY 로 수렴하는지 폴링 확인.
         // READY -> REINDEXING -> READY 로 전이하지만, stub + 빈/소량 active memory 셋에서는
@@ -150,7 +152,8 @@ class SettingsFlowSmokeTest {
                             .andReturn()
                             .getResponse()
                             .getContentAsString();
-            lastStatus = mapper.readTree(body).path("embedding").path("status").asText();
+            lastStatus =
+                    mapper.readTree(body).path("data").path("embedding").path("status").asText();
             if ("READY".equals(lastStatus)) {
                 return lastStatus;
             }

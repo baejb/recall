@@ -565,6 +565,41 @@ input:focus {
   font-weight: 600;
 }
 
+/* 트러블슈팅 시도 이력 — 실패한 시도도 판정 기호와 함께 남긴다. */
+.attempts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.attempts li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14.5px;
+}
+.attempts .mark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  flex: none;
+}
+.attempts .mark.failed {
+  color: var(--bad);
+}
+.attempts .mark.partial {
+  color: var(--warn);
+}
+.attempts .mark.worked {
+  color: var(--ok);
+}
+.attempts .mark.unknown {
+  color: var(--text-faint);
+}
+.attempts .arrow {
+  color: var(--text-faint);
+}
+
 .mask {
   background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
