@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,8 +78,12 @@ public class AnswerStreamer {
                 // 둘을 구분할 수 없었으므로, 빈 결과에는 판단된 유형을 함께 남긴다(조용한 실패 금지).
                 // 질문 원문은 남기지 않는다 — 로그는 마스킹 경로를 거치지 않는다.
                 log.info("기록 없음 응답: user={} type={}", ctx.userId(), type);
+                // 조각 형태를 record 하나로 통일한다 — 이 이벤트만 Map 으로 보내면 나머지 조각과 와이어
+                // 키 집합이 달라진다(계약: Map 금지, 타입 있는 record). memoryId 는 없음(text 만).
                 emitter.send(
-                        SseEmitter.event().name(EVENT_NAME).data(Map.of("text", NO_RECORD_TEXT)));
+                        SseEmitter.event()
+                                .name(EVENT_NAME)
+                                .data(new AnswerFragment(NO_RECORD_TEXT, null)));
                 emitter.complete();
                 return;
             }
