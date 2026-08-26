@@ -2,6 +2,7 @@ package com.recall.settings;
 
 import com.recall.common.config.BootstrapCurrentUserProvider;
 import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.SecretKeyUnavailableException;
 import com.recall.common.exception.UpstreamUnavailableException;
 import com.recall.common.exception.ValidationException;
 import com.recall.common.secret.SecretCipher;
@@ -335,7 +336,8 @@ public class SettingsService {
 
     private String encrypt(String plaintext) {
         if (!cipher.isEnabled()) {
-            throw new IllegalStateException(
+            // 서버 미구성(마스터키 없음) — 예측 가능한 운영 상황이라 500 catch-all 이 아니라 503 전용 코드로.
+            throw new SecretKeyUnavailableException(
                     "RECALL_SECRET_KEY 미설정 — UI 입력 키를 저장할 수 없다(fail-closed)");
         }
         return cipher.encrypt(plaintext);
