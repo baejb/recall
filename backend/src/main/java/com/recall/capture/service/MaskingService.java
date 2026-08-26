@@ -57,9 +57,11 @@ public class MaskingService {
                     // 영어 키 이름만 보면 "비밀번호: hunter2" 가 그대로 외부 LLM·인덱스로 나간다(🔴 유출).
                     // `pass` 는 `db_pass=` 같은 축약 키를 잡되 `(?![a-z])` 로 passing/passed 를 배제한다 —
                     // 그게 없으면 `passing=true` 의 값까지 가려 원문이 읽을 수 없게 된다(거짓 양성).
+                    // separator 의 여는 따옴표는 `["']?` — 큰따옴표만 소비하면 `password='hunter2'` 처럼
+                    // 작은따옴표로 감싼 값(YAML·Python/Ruby dict 등)이 매칭에서 통째로 빠져 그대로 유출된다.
                     new Rule(
                             Pattern.compile(
-                                    "(?i)([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd|pass(?![a-z])|access[_-]?key|client[_-]?secret|apikey|비밀번호|암호|토큰)[A-Za-z0-9_.-]*)(\\s*[:=]\\s*\"?)([^\\s\"'⟨⟩]+)"),
+                                    "(?i)([A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|pwd|pass(?![a-z])|access[_-]?key|client[_-]?secret|apikey|비밀번호|암호|토큰)[A-Za-z0-9_.-]*)(\\s*[:=]\\s*[\"']?)([^\\s\"'⟨⟩]+)"),
                             "$1$2⟨SECRET⟩"),
                     new Rule(
                             Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"),
