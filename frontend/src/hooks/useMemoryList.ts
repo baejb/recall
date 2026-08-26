@@ -50,7 +50,10 @@ export function useMemoryList(): MemoryListState {
   // 리셋 트리거(reload). 값이 바뀌면 첫 페이지를 다시 읽는다.
   const [reloadKey, setReloadKey] = useState(0)
 
-  const ctrlRef = useRef<AbortController | null>(null)
+  // 첫-페이지(리셋)와 다음-페이지(loadMore)는 컨트롤러를 분리한다 — 공유하면 리셋이 진행 중인
+  // loadMore 를 abort 해 loadingMore 가 영구 true 로 고착된다(페이지네이션 정지).
+  const firstCtrlRef = useRef<AbortController | null>(null)
+  const moreCtrlRef = useRef<AbortController | null>(null)
 
   // 검색어 디바운스: 타이머 콜백에서만 setState → 첫 페이지 재요청 트리거.
   useEffect(() => {
@@ -62,9 +65,12 @@ export function useMemoryList(): MemoryListState {
 
   // 첫 페이지 로드(리셋). query(디바운스)·scope·reloadKey 변경 시. setState는 전부 async 콜백에서만.
   useEffect(() => {
-    ctrlRef.current?.abort()
+    firstCtrlRef.current?.abort()
+    // 진행 중이던 다음-페이지 요청도 취소한다(옛 쿼리의 페이지가 새 목록에 섞이는 것 방지). 취소되면
+    // loadMore 의 finally 가 loadingMore 를 내려주므로(무조건 실행) 스피너가 고착되지 않는다.
+    moreCtrlRef.current?.abort()
     const ctrl = new AbortController()
-    ctrlRef.current = ctrl
+    firstCtrlRef.current = ctrl
     getMemories(
       { q: debouncedQuery || undefined, type: typeParam, status: statusView, limit: PAGE_SIZE },
       ctrl.signal
@@ -89,7 +95,7 @@ export function useMemoryList(): MemoryListState {
     // 이미 진행 중이거나 더 없으면 무시(중복 요청 차단). setState는 이벤트/관찰자 콜백에서 호출 → 허용.
     if (!nextCursor || loadingMore || loading) return
     const ctrl = new AbortController()
-    ctrlRef.current = ctrl
+    moreCtrlRef.current = ctrl
     setLoadingMore(true)
     getMemories(
       {
@@ -112,7 +118,9 @@ export function useMemoryList(): MemoryListState {
         setError(e instanceof Error ? e.message : '다음 페이지를 불러오지 못했어요')
       })
       .finally(() => {
-        if (!ctrl.signal.aborted) setLoadingMore(false)
+        // aborted(리셋이 취소)여도 무조건 내린다 — 안 그러면 리셋이 이 요청을 취소했을 때
+        // loadingMore 가 영구 true 로 고착돼 페이지네이션이 멈춘다.
+        setLoadingMore(false)
       })
   }, [debouncedQuery, typeParam, statusView, nextCursor, loading, loadingMore])
 
