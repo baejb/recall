@@ -9,12 +9,36 @@ import { CaptureRawView } from '../components/CaptureRawView'
 
 export function ReviewDetailPage() {
   const { id } = useParams()
-  const { getReview, approveReview, rejectReview } = useRecall()
+  const { getReview, approveReview, rejectReview, loading, error } = useRecall()
   const navigate = useNavigate()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
 
   const review = id ? getReview(id) : undefined
+
+  // 로딩·서버장애를 "없는 항목"으로 오인 표시하지 않는다(조용한 실패 금지). 직접 진입·새로고침 시
+  // fetchAll 이 끝나기 전엔 review 가 undefined 라, 그 구간을 로딩/에러와 구분해야 한다.
+  if (!review && loading && !error) {
+    return (
+      <section className="screen">
+        <button className="backbtn" onClick={() => navigate('/reviews')}>
+          ← 검토함으로
+        </button>
+        <div className="card pad">불러오는 중…</div>
+      </section>
+    )
+  }
+
+  if (!review && error) {
+    return (
+      <section className="screen">
+        <button className="backbtn" onClick={() => navigate('/reviews')}>
+          ← 검토함으로
+        </button>
+        <div className="card empty">불러오지 못했어요: {error}</div>
+      </section>
+    )
+  }
 
   if (!review) {
     return (

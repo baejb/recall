@@ -105,6 +105,7 @@ macOS·Linux 는 해당 없다.
 | 42 | 2026-08-23 | 구조 | ~~남는 침범 **6건은 JPA FK 연관**으로 인정한다~~: `Memory→Capture` · `ReviewItem→Capture,Memory` 와 그 연관을 세우는 `MemoryAccess`·`ReviewIntake` 의 `getReference` | 이 6건은 스키마의 FK 그 자체다 — 끊으려면 `@ManyToOne` 을 plain FK 컬럼으로 내리고 (마이그레이션은 없지만) 연관을 쓰는 코드·테스트를 함께 바꿔야 한다. 소유자 파생(`user_id` 는 capture 에서만 온다 — 교차유출 금지)을 지키려면 memory 가 capture 를 읽어야 하므로, 연관을 소유한 모듈이 참조 클래스를 아는 것은 회피가 아니라 사실이다. 후속으로 남긴다 | open |
 | 43 | 2026-08-23 | 구조 | 모듈 경계를 넘는 FK 는 **연관이 아니라 id 컬럼**으로 맵핑한다(`Memory.captureId` · `ReviewItem.captureId`·`memoryId`). 42번 대체 — 침범 6 → **0건** | 42번에서 "FK 연관은 어쩔 수 없다"고 인정했지만 다시 보니 **스키마 변경이 아니라 매핑 변경**이었다(같은 컬럼, 마이그레이션 없음). 연관으로 두면 그 모듈이 남의 엔티티 클래스를 알아야 하고 그 지식이 행을 만드는 서비스까지 번진다(참조를 얻어야 하므로). 필요한 건 FK 값 하나이고 무결성은 DB 제약이 지킨다. 부수 효과로 lazy 프록시·연관 탐색이 사라져 트랜잭션 밖 접근 사고도 없어졌다 | active |
 | 44 | 2026-08-23 | 보안 | 연관이 **타입으로 강제하던 불변식**(`memory.user_id` = capture 소유자)은 유일한 쓰기 경로가 책임지고, 회귀 테스트가 타입의 자리를 대신한다(`MemoryAccessOwnerDerivationTest`, release-gate) | 43번의 대가다: 생성자가 `Capture` 를 받던 동안은 소유자 파생이 컴파일러가 지키는 사실이었는데, `long` 으로 낮추면 아무 값이나 들어갈 수 있다. 그 강제를 잃은 채 두면 남의 원문으로 만든 카드가 내 소유로 저장될 수 있다(🔴 교차유출). 그래서 `MemoryAccess`·`ReviewIntake` 가 호출자의 값을 믿지 않고 `CaptureAccess.ownerOf` 로 직접 파생하고, 그 동작을 테스트로 고정한다 | active |
+| 45 | 2026-08-26 | capture | 원문 캡처는 동기 DB 커밋 유지(redis 버퍼/배치 도입 안 함) | 유실 금지 앵커(불변 원칙) — 버퍼 flush 전 크래시 = 근거 유실. 캡처는 write당 INSERT 1회라 현재 병목 아님. 부하 병목 확인 시 유실 보장되는 방식으로 재검토(PR#4 리뷰 코멘트) | active |
 
 ## 4. 개인용 설정 (`templates/`)
 

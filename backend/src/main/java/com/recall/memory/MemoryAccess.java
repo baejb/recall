@@ -72,15 +72,18 @@ public class MemoryAccess {
     }
 
     /**
-     * id 목록을 <b>주어진 순서대로</b> 조회한다.
+     * id 목록을 <b>주어진 순서대로</b>, <b>소유자 스코프로</b> 조회한다.
      *
      * <p>순서 유지가 계약인 이유: 호출자(하이브리드 검색)는 이미 결정론 융합으로 순위를 정해 놓았고, 여기서 DB 반환 순서로 섞이면 그 융합이 무의미해진다. 없는
      * id 는 조용히 빠진다(그 사이 상태가 바뀐 행) — 목록이 짧아지는 것은 유실이 아니라 최신 상태다.
+     *
+     * <p><b>userId 를 받는 이유</b> — {@code findOwned} 와 같은 이중 방어다. 검색 인덱스가 이미 소유자 스코프였더라도 재조회 지점에서 소유자
+     * 조건을 다시 강제해, 남의 id 가 섞여 들어오는 미래 호출부가 생겨도 교차유출(🔴)이 되지 않게 계약으로 고정한다.
      */
     @Transactional(readOnly = true)
-    public List<StoredMemory> byIdsInOrder(List<Long> ids) {
+    public List<StoredMemory> byIdsInOrder(long userId, List<Long> ids) {
         Map<Long, StoredMemory> found =
-                memoryRepository.findAllById(ids).stream()
+                memoryRepository.findByIdInAndUserId(ids, userId).stream()
                         .map(MemoryAccess::toStored)
                         .collect(Collectors.toMap(StoredMemory::id, Function.identity()));
         return ids.stream().map(found::get).filter(Objects::nonNull).toList();

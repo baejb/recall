@@ -2,6 +2,7 @@ package com.recall.common.secret;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.recall.common.exception.SecretKeyUnavailableException;
 import java.util.Base64;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,7 @@ class SecretCipherTest {
     void failClosed() {
         SecretCipher cipher = new SecretCipher("  ");
         assertFalse(cipher.isEnabled());
-        assertThrows(IllegalStateException.class, () -> cipher.encrypt("x"));
+        // 서버 미구성이라 500 catch-all 이 아니라 503 전용 타입으로(경계에서 분류된 예외).
+        assertThrows(SecretKeyUnavailableException.class, () -> cipher.encrypt("x"));
     }
 }

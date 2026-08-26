@@ -6,7 +6,10 @@ import com.recall.llm.LlmClient;
 import com.recall.llm.LlmConfig;
 import com.recall.llm.LlmProperties;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.InterruptedIOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -92,16 +95,30 @@ public class AnthropicLlmClient implements LlmClient {
                                     new BufferedReader(
                                             new InputStreamReader(
                                                     response.getBody(), StandardCharsets.UTF_8))) {
-                                String line;
-                                while ((line = reader.readLine()) != null) {
-                                    if (line.startsWith("data:")) {
-                                        parseTextDelta(line.substring(5).trim(), objectMapper)
-                                                .ifPresent(onToken);
-                                    }
-                                }
+                                consumeStream(reader, onToken);
                             }
                             return null;
                         });
+    }
+
+    /**
+     * SSE 응답을 라인 단위로 소비해 텍스트 델타를 {@code onToken}으로 흘린다.
+     *
+     * <p>매 라인마다 인터럽트를 관측한다 — 취소(SSE 타임아웃·클라이언트 끊김)는 {@code AnswerStreamer}가 워커를 interrupt 하는데, 그
+     * 관측이 텍스트 토큰 도착에만 걸려 있으면 하트비트만 오거나 델타 사이가 뜬 스톨 구간에서 취소가 관측되지 않아 이 루프와 하부 커넥션이 남는다(누수). 라인마다 검사해
+     * 취소를 즉시 반영한다({@code AnswerStreamer}의 clientGone 경로로 completeWithError). 소켓이 완전히 침묵하는 경우까지 끊으려면
+     * read timeout 이 필요하나 그건 전 provider 공통 설정이라 별도(후속).
+     */
+    void consumeStream(BufferedReader reader, Consumer<String> onToken) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new UncheckedIOException(new InterruptedIOException("Anthropic 스트림 취소됨"));
+            }
+            if (line.startsWith("data:")) {
+                parseTextDelta(line.substring(5).trim(), objectMapper).ifPresent(onToken);
+            }
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.recall.common.secret;
 
+import com.recall.common.exception.SecretKeyUnavailableException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -66,7 +67,8 @@ public final class SecretCipher {
 
     private void require() {
         if (key == null) {
-            throw new IllegalStateException(
+            // 서버 미구성(마스터키 없음) — 저장·복호화 양쪽에서 예측 가능한 운영 상황이라 503 전용 코드로.
+            throw new SecretKeyUnavailableException(
                     "RECALL_SECRET_KEY 미설정 — 키를 DB에 저장/복호화할 수 없다(fail-closed)");
         }
     }

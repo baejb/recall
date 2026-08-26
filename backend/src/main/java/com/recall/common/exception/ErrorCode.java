@@ -73,6 +73,15 @@ public enum ErrorCode {
      */
     ASYNC_TIMEOUT(HttpStatus.SERVICE_UNAVAILABLE),
 
+    /**
+     * 503 — 서버에 마스터키(RECALL_SECRET_KEY)가 없어 provider 키를 저장/복호화할 수 없다(fail-closed).
+     *
+     * <p>{@link #INTERNAL_ERROR}(500)와 나눈 이유: 이건 서버 코드 결함이 아니라 <b>운영자가 마스터키를 주입하면 풀리는 예측 가능한
+     * 미구성</b> 상태다. 500 catch-all 로 흘리면 "분류되지 않은 예외"로 로깅돼 실제 결함 신호에 섞이고, 운영자는 traceId 만 보고 원인을 로그에서
+     * 파야 한다. {@link #AI_NOT_CONFIGURED}(409, 사용자가 자기 키를 안 넣음)와도 다르다 — 이건 서버 측 미구성이다.
+     */
+    SECRET_KEY_UNCONFIGURED(HttpStatus.SERVICE_UNAVAILABLE),
+
     /** 500 — 분류되지 않은 예외. 내부 정보는 응답에 싣지 않는다(로그로만). */
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
 
