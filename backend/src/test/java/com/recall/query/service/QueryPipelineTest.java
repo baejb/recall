@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.recall.common.exception.AiNotConfiguredException;
 import com.recall.common.prompt.PromptLoader;
@@ -18,6 +22,7 @@ import com.recall.memory.type.CardCodec;
 import com.recall.memory.type.MemoryCard;
 import com.recall.memory.type.knowledge.KnowledgeAnswer;
 import com.recall.memory.type.knowledge.KnowledgeExtraction;
+import com.recall.search.HybridSearchService;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -101,6 +106,47 @@ class QueryPipelineTest {
         assertTrue(prompt.contains("토폴로지 분리는 끝났다"), "요약");
         assertTrue(prompt.contains("별도 배포 단위"), "사실1");
         assertTrue(prompt.contains("REST·Kafka로만 연결"), "사실2");
+    }
+
+    // ── R retrieve (유형 배타필터 false-negative 보정) ──────────
+
+    @Test
+    @DisplayName("retrieve: 분류 유형에 결과 없으면 나머지 등록 유형을 재검색해 근거를 찾는다(기록 없음 오판 방지)")
+    void retrieveFallsBackToOtherTypesWhenPrimaryEmpty() {
+        HybridSearchService search = mock(HybridSearchService.class);
+        UserAiContext ctx = ctxWithLlm((s, u) -> "");
+        when(search.search("q", MemoryType.KNOWLEDGE, ctx)).thenReturn(List.of());
+        when(search.search("q", MemoryType.TROUBLESHOOTING, ctx)).thenReturn(List.of(mem(2)));
+
+        QueryPipeline p = new QueryPipeline(search, cardCodec(), BOTH_TYPES);
+        List<StoredMemory> out = p.retrieve("q", MemoryType.KNOWLEDGE, ctx);
+
+        assertEquals(List.of(2L), ids(out), "분류가 KNOWLEDGE 였어도 TROUBLESHOOTING 근거를 찾아야 한다");
+    }
+
+    @Test
+    @DisplayName("retrieve: 분류 유형에 결과가 있으면 다른 유형을 재검색하지 않는다(빠른 경로 유지)")
+    void retrieveDoesNotFallBackWhenPrimaryHasResults() {
+        HybridSearchService search = mock(HybridSearchService.class);
+        UserAiContext ctx = ctxWithLlm((s, u) -> "");
+        when(search.search("q", MemoryType.KNOWLEDGE, ctx)).thenReturn(List.of(mem(1)));
+
+        QueryPipeline p = new QueryPipeline(search, cardCodec(), BOTH_TYPES);
+        List<StoredMemory> out = p.retrieve("q", MemoryType.KNOWLEDGE, ctx);
+
+        assertEquals(List.of(1L), ids(out));
+        verify(search, org.mockito.Mockito.never()).search("q", MemoryType.TROUBLESHOOTING, ctx);
+    }
+
+    @Test
+    @DisplayName("retrieve: 전 유형에서 결과 없으면 빈 결과(진짜 기록 없음)")
+    void retrieveEmptyWhenNoTypeHasResults() {
+        HybridSearchService search = mock(HybridSearchService.class);
+        UserAiContext ctx = ctxWithLlm((s, u) -> "");
+        when(search.search(anyString(), any(), any())).thenReturn(List.of());
+
+        QueryPipeline p = new QueryPipeline(search, cardCodec(), BOTH_TYPES);
+        assertTrue(p.retrieve("q", MemoryType.KNOWLEDGE, ctx).isEmpty());
     }
 
     // ── RR parseOrder ───────────────────────────────────────

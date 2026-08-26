@@ -123,7 +123,25 @@ public class QueryPipeline {
      */
     @Transactional(readOnly = true)
     public List<StoredMemory> retrieve(String question, MemoryType type, UserAiContext ctx) {
-        return readable(searchService.search(question, type, ctx));
+        List<StoredMemory> primary = readable(searchService.search(question, type, ctx));
+        if (!primary.isEmpty()) {
+            return primary;
+        }
+        // 검색은 유형을 배타 필터(WHERE type=?)로 쓴다. 그래서 C 분류가 틀리거나 실패해 기본 유형으로
+        // 격하되면, 다른 유형 파티션에 근거가 있어도 빈 결과 → "기록 없음"이 된다(기억이 있는데 없다고
+        // 답함, 불변 원칙 5 위반). 빈 결과일 때만 나머지 등록 유형을 재검색해, 전 유형에서 근거가 없을 때만
+        // 빈 결과를 확정한다. registered() 는 EnumMap 이라 순회 순서가 결정적이다(불변 원칙 4: R 은 결정론).
+        for (MemoryType other : answers.registered()) {
+            if (other == type) {
+                continue;
+            }
+            List<StoredMemory> alt = readable(searchService.search(question, other, ctx));
+            if (!alt.isEmpty()) {
+                log.info("유형 {} 검색 결과 없음 → {} 재검색에서 근거 확보(C 분류 보정)", type, other);
+                return alt;
+            }
+        }
+        return primary; // 전 유형에서 없음 → 진짜 기록 없음
     }
 
     /**
