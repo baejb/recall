@@ -10,7 +10,10 @@ import com.recall.capture.service.entity.CaptureStatus;
 import com.recall.common.config.CurrentUserProvider;
 import com.recall.common.exception.NotFoundException;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +23,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class CaptureService {
 
+    private static final Logger log = LoggerFactory.getLogger(CaptureService.class);
+
     private static final String DEFAULT_SOURCE_TYPE = "chat";
+
+    /**
+     * 상태 스트립에 노출할 처리중/실패 캡처 상한. 처리중(in-flight)은 최신순 상단이라 항상 포함되고, 상한은 사실상 오래된 FAILED 누적을 자른다. 무제한
+     * 로드(메모리·응답 크기)를 막는다.
+     */
+    private static final int MAX_ACTIVE = 200;
 
     private final CaptureRepository captureRepository;
     private final MaskingService maskingService;
@@ -75,11 +86,18 @@ public class CaptureService {
      */
     @Transactional(readOnly = true)
     public List<CaptureStatusResponse> activeCaptures() {
-        return captureRepository
-                .findByUserIdAndStatusInOrderByCreatedAtDesc(
-                        currentUser.currentUserId(),
-                        List.of(CaptureStatus.PROCESSING, CaptureStatus.FAILED))
-                .stream()
+        long userId = currentUser.currentUserId();
+        List<Capture> rows =
+                captureRepository.findByUserIdAndStatusInOrderByCreatedAtDesc(
+                        userId,
+                        List.of(CaptureStatus.PROCESSING, CaptureStatus.FAILED),
+                        Limit.of(MAX_ACTIVE));
+        if (rows.size() >= MAX_ACTIVE) {
+            // 조용한 절단 금지(불변 원칙): 상한에 닿으면(오래된 FAILED 누적) 잘렸음을 드러낸다. 최신순이라
+            // 처리중(in-flight)·최근 실패는 항상 포함된다. 사용자에게 "실패 정리 필요" 배너로 노출은 후속.
+            log.warn("activeCaptures 상한 {}건 도달 — 오래된 항목이 잘렸다: user={}", MAX_ACTIVE, userId);
+        }
+        return rows.stream()
                 .map(
                         c ->
                                 new CaptureStatusResponse(

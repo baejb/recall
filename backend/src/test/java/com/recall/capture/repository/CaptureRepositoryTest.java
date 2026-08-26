@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Limit;
 
 /**
  * capture 상태 저장/조회의 실 DB 계약 검증. markFailed 가 자기 소유 트랜잭션(REQUIRES_NEW)으로 FAILED 를 원자적으로 쓰는지,
@@ -58,7 +59,7 @@ class CaptureRepositoryTest {
         List<Long> ids =
                 captureRepository
                         .findByUserIdAndStatusInOrderByCreatedAtDesc(
-                                1L, List.of("PROCESSING", "FAILED"))
+                                1L, List.of("PROCESSING", "FAILED"), Limit.unlimited())
                         .stream()
                         .map(Capture::getId)
                         .toList();
