@@ -17,6 +17,9 @@ import com.recall.llm.UserAiContext;
 import com.recall.memory.StoredMemory;
 import com.recall.query.controller.dto.AnswerFragment;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -101,6 +104,67 @@ class AnswerStreamerTest {
         verify(pipeline).composeStreaming(eq("q"), anyList(), any(), eq(CTX));
         verify(pipeline, never()).fallbackFragments(any());
         verify(emitter).complete();
+    }
+
+    @Test
+    @DisplayName("타임아웃 취소 → 스트리밍 워커 스레드를 인터럽트하고 emitter 종료")
+    void cancelOnTimeoutInterruptsWorker() throws Exception {
+        AnswerStreamer streamer = new AnswerStreamer(mock(QueryPipeline.class));
+        SseEmitter emitter = mock(SseEmitter.class);
+        CountDownLatch started = new CountDownLatch(1);
+        AtomicBoolean interrupted = new AtomicBoolean(false);
+        Thread worker =
+                Thread.ofVirtual()
+                        .unstarted(
+                                () -> {
+                                    started.countDown();
+                                    try {
+                                        Thread.sleep(10_000);
+                                    } catch (InterruptedException e) {
+                                        interrupted.set(true);
+                                    }
+                                });
+        worker.start();
+        org.junit.jupiter.api.Assertions.assertTrue(started.await(1, TimeUnit.SECONDS));
+
+        streamer.cancelOnTimeout(worker, emitter, 2L);
+
+        worker.join(1000);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                interrupted.get(), "타임아웃 취소는 워커 스레드를 인터럽트해야 한다");
+        verify(emitter).complete();
+    }
+
+    @Test
+    @DisplayName("취소(interrupt)된 스트림 → 토큰 소비 즉시 중단, 에러로 완료(격하 아님)")
+    void interruptedStreamStopsConsuming() throws Exception {
+        QueryPipeline pipeline = mock(QueryPipeline.class);
+        SseEmitter emitter = mock(SseEmitter.class);
+        List<StoredMemory> candidates = List.of(memory());
+        when(pipeline.classify("q", CTX)).thenReturn(MemoryType.KNOWLEDGE);
+        when(pipeline.retrieve("q", MemoryType.KNOWLEDGE, CTX)).thenReturn(candidates);
+        when(pipeline.rerank(eq("q"), anyList(), eq(CTX))).thenReturn(candidates);
+        int[] delivered = {0};
+        doAnswer(
+                        inv -> {
+                            Consumer<String> sink = inv.getArgument(2);
+                            Thread.currentThread().interrupt(); // 취소 상태 모사
+                            sink.accept("첫 토큰"); // interrupt 관측 → 예외로 중단
+                            delivered[0]++;
+                            sink.accept("둘째 토큰");
+                            delivered[0]++;
+                            return null;
+                        })
+                .when(pipeline)
+                .composeStreaming(eq("q"), anyList(), any(), eq(CTX));
+
+        new AnswerStreamer(pipeline).emit(emitter, "q", CTX);
+        Thread.interrupted(); // 테스트 스레드 interrupt 플래그 정리(격리)
+
+        // interrupt를 관측한 즉시 첫 토큰부터 중단 → 어떤 토큰도 전달되지 않는다.
+        org.junit.jupiter.api.Assertions.assertEquals(0, delivered[0]);
+        verify(pipeline, never()).fallbackFragments(any());
+        verify(emitter).completeWithError(any());
     }
 
     @Test
