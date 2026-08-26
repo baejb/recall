@@ -50,7 +50,10 @@
   {
     "id": "jwt",
     "input": "토큰이 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c 인데 exp 가 지났다",
-    "secrets": ["eyJhbGciOiJIUzI1NiJ9", "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"],
+    "secrets": [
+      "eyJhbGciOiJIUzI1NiJ9",
+      "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    ],
     "expect": ["JWT"]
   },
   {
@@ -69,6 +72,12 @@
     "id": "yaml-style-quoted-secret",
     "input": "application.yml 에 client_secret: \"GOCSPX-abcdefghijklmnop\" 를 그대로 뒀다",
     "secrets": ["GOCSPX-abcdefghijklmnop"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "single-quoted-secret",
+    "input": "config 에 password='hunter2-single' 로 박아뒀다",
+    "secrets": ["hunter2-single"],
     "expect": ["SECRET"]
   },
   {
