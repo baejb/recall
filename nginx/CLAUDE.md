@@ -8,7 +8,8 @@
 nginx는 **호스트에서** 구동한다(개발용 Docker Compose는 DB만 띄운다). 두 가지를 한다.
 
 1. 빌드된 프론트 SPA(`frontend/dist`) **정적 서빙** + SPA fallback(`try_files … /index.html`).
-2. `/api` → 백엔드(`:8080`) **프록시**로 프론트/백엔드를 **동일 오리진**으로 묶는다(브라우저 CORS 제거).
+2. **백엔드 경로 프록시**로 프론트/백엔드를 **동일 오리진**으로 묶는다(브라우저 CORS 제거).
+   `/api` 외에 **OAuth 경로 두 개**가 반드시 포함된다 — 아래 필수 규칙 참조.
 
 > 기준 설정 파일은 `nginx/nginx.conf`. 배포 시 `root` 를 프론트 빌드 산출물(`frontend/dist`)로
 > 맞춘다.
@@ -18,6 +19,14 @@ nginx는 **호스트에서** 구동한다(개발용 Docker Compose는 DB만 띄�
 - **SSE 프록시**: 조회(`POST /api/query`)는 서버-전송 이벤트 스트리밍이다. `/api` location에
   **`proxy_buffering off;`** 를 반드시 유지한다. 버퍼링이 켜지면 스트리밍 답변이 끊긴다
   (불변 원칙 "조용한 실패 금지"와 직결). `proxy_http_version 1.1;` + `Connection ''` 도 함께 둔다.
+- **🔴 백엔드로 보낼 경로는 셋이다**: `/api/` · `/oauth2/` · `/login/`. 뒤의 둘이 빠지면 SPA fallback
+  (`try_files $uri /index.html`)이 로그인 시작 주소와 **Google 콜백의 authorization code** 를 SPA HTML 로
+  삼킨다. 백엔드에 닿지 않으므로 세션이 만들어지지 않고, 증상은 "로그인했는데 로그인 화면"이다 — 콘솔·
+  네트워크 탭에 에러가 없어 원인이 드러나지 않는다(조용한 실패). 백엔드 `PUBLIC_PATHS` 에 이 경로를 연
+  것은 **백엔드 필터 체인 안에서만** 유효하다. dev 는 `frontend/vite.config.ts` 의 `BACKEND_PATHS` 가
+  같은 목록을 갖는다 — 한쪽만 고치지 않는다.
+- **OAuth 경로에는 `Host`·`X-Forwarded-*` 를 넘긴다**: 스프링이 이 값으로 `redirect_uri` 를 만든다.
+  어긋나면 Google 이 `redirect_uri_mismatch` 로 거절한다.
 - **API 호스트 하드코딩 금지**: 프론트는 상대경로 `/api`로만 호출한다. 백엔드 주소 변경은 nginx
   `proxy_pass` 한 곳에서 흡수한다.
 - **비밀 금지**: 설정 파일에 키·토큰을 넣지 않는다.

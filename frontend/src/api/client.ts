@@ -51,7 +51,15 @@ export class ApiRequestError extends Error {
     return this.status === 401 || this.code === 'UNAUTHENTICATED'
   }
 
-  /** 인증은 됐지만 허용되지 않았다(허용목록 밖·CSRF 토큰 불일치). 로그인 루프에 빠뜨리지 않는다. */
+  /**
+   * 인증은 됐지만 이 요청이 허용되지 않았다. 실제로 이 코드가 오는 경로는 **CSRF 토큰 불일치**다
+   * (세션이 재시작으로 갈렸거나 쿠키가 지워진 경우).
+   *
+   * 허용목록 밖 계정은 403 이 아니다 — 백엔드가 `/?login_error=not_allowed` 로 302 리다이렉트하고
+   * 로그인 화면이 배너를 띄운다. 그 계약을 여기 적어 두면 없는 분기를 짜게 된다.
+   *
+   * 로그인 루프에 빠뜨리지 않는다: 401 과 달리 다시 로그인해도 해결되지 않는다.
+   */
   get isForbidden(): boolean {
     return this.status === 403 || this.code === 'FORBIDDEN'
   }
@@ -69,7 +77,8 @@ export const UNAUTHENTICATED_EVENT = 'recall:unauthenticated'
  * CSRF 토큰 — 세션 기반 인증이라 상태변경 요청에 필요하다.
  *
  * 백엔드가 `XSRF-TOKEN` 쿠키로 내려보내고(httpOnly=false) 우리가 `X-XSRF-TOKEN` 헤더로 돌려준다.
- * 쿠키는 토큰을 실제로 읽을 때 발급되므로(지연 생성) 앱이 부팅 직후 `/api/me` 를 부르는 것이 그 계기다.
+ * 백엔드가 지연 생성을 끄기 때문에(`setCsrfRequestAttributeName(null)`) 쿠키는 **어느 요청에서든**
+ * 나간다 — 특정 호출(`/api/me`)에 매인 것이 아니다.
  * 부트스트랩 모드에서는 CSRF 가 꺼져 있어 쿠키가 없고, 그때는 헤더를 붙이지 않는다.
  */
 function csrfHeaders(method: string): Record<string, string> {
@@ -80,8 +89,22 @@ function csrfHeaders(method: string): Record<string, string> {
 }
 
 /**
+ * 403 일 때 화면에 띄울 메시지.
+ *
+ * 백엔드의 "허용되지 않은 요청입니다" 는 원인을 말해 주지 않는다. 이 앱에서 실제로 403 이 나는 경로는
+ * **CSRF 토큰 불일치**이고(서버 재시작으로 세션이 갈렸거나 쿠키가 지워진 경우), 그때 일반 에러 토스트만
+ * 뜨면 증상이 "저장이 가끔 안 됨" 으로 보여 원인을 찾을 수 없다. 사용자가 할 수 있는 행동을 알려준다
+ * (조용한 실패 금지).
+ */
+const FORBIDDEN_MESSAGE =
+  '보안 토큰이 맞지 않아 요청이 거부됐어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.'
+
+/**
  * 응답 본문(봉투)에서 실패를 읽어 `ApiRequestError` 를 만든다. 봉투가 없거나 깨졌으면(프록시 에러 페이지,
  * 네트워크 단절) 상태 코드만으로 만든다 — 그 경우에도 조용히 성공으로 넘기지 않는다.
+ *
+ * 메시지를 여기 한 곳에서 만드는 이유: 모든 화면이 `error.message` 를 그대로 토스트에 띄우므로, 403 을
+ * 화면마다 분기하지 않고 이 자리에서 한 번 바꾸면 전부 같은 안내를 받는다.
  */
 function toRequestError(label: string, status: number, text: string): ApiRequestError {
   let error: ApiError | undefined
@@ -90,9 +113,14 @@ function toRequestError(label: string, status: number, text: string): ApiRequest
   } catch {
     // 봉투가 아니면 상태 코드만으로 만든다.
   }
-  const message = error?.message ?? `${label} → ${status}`
   const suffix = error ? ` (${error.code}, traceId=${error.traceId})` : ''
-  return new ApiRequestError(`${message}${suffix}`, status, error)
+  const requestError = new ApiRequestError(
+    `${error?.message ?? `${label} → ${status}`}${suffix}`,
+    status,
+    error
+  )
+  if (!requestError.isForbidden) return requestError
+  return new ApiRequestError(`${FORBIDDEN_MESSAGE}${suffix}`, status, error)
 }
 
 /**

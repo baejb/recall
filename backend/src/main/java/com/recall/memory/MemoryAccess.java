@@ -86,6 +86,18 @@ public class MemoryAccess {
         return ids.stream().map(found::get).filter(Objects::nonNull).toList();
     }
 
+    /**
+     * 이 사용자가 소유한 memory 건수.
+     *
+     * <p><b>왜 공개 계약에 있나</b> — {@code auth} 의 부팅 안내가 이 수를 필요로 하는데, 전에는 그쪽에서 {@code SELECT count(*)
+     * FROM memory WHERE user_id = ?} 를 직접 날렸다. 그러면 이 모듈이 {@code user_id} 컬럼명을 바꾸는 순간 남의 모듈 부팅이 깨지고
+     * <b>컴파일 타임 신호가 없다</b>. 메서드로 내면 같은 변경이 컴파일 에러로 드러난다.
+     */
+    @Transactional(readOnly = true)
+    public long countOwnedBy(long userId) {
+        return memoryRepository.countByUserId(userId);
+    }
+
     private static StoredMemory toStored(Memory memory) {
         return new StoredMemory(memory.getId(), memory.getType(), memory.getStructured());
     }

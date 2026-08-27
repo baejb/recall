@@ -85,10 +85,15 @@ public enum ErrorCode {
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED),
 
     /**
-     * 403 — 인증은 됐지만 이 인스턴스가 허용한 계정이 아니다(허용목록 밖).
+     * 403 — 인증은 됐지만 이 요청이 허용되지 않는다. 실제로 이 코드가 나가는 경로는 <b>CSRF 토큰 불일치</b>와 그 밖의 인가 거부다({@code
+     * ApiErrorAuthenticationHandlers.accessDeniedHandler}).
      *
-     * <p>401 과 나누는 이유: 401 은 "로그인하면 된다"이고 403 은 "로그인해도 안 된다"다. 하나로 묶으면 화면이 허용되지 않은 계정을 로그인 루프에
-     * 빠뜨린다.
+     * <p><b>허용목록 밖 계정은 이 코드를 받지 않는다.</b> {@code LoginNotAllowedException} 은 {@code
+     * AuthenticationException} 이라 OAuth 로그인 실패 경로를 타고 {@code /?login_error=not_allowed} 로 <b>302
+     * 리다이렉트</b>된다. 전에 이 자리에 "허용목록 밖"이라고 적혀 있었는데, 그 계약은 코드에 존재하지 않았다 — 그걸 믿고 분기를 짜면 죽은 코드가 된다.
+     *
+     * <p>401 과 나누는 이유: 401 은 "로그인하면 된다"이고 403 은 "로그인해도 안 된다"다. 하나로 묶으면 화면이 만료된 CSRF 토큰을 로그인 루프로
+     * 오해한다.
      */
     FORBIDDEN(HttpStatus.FORBIDDEN),
 

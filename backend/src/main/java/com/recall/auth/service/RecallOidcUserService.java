@@ -3,6 +3,8 @@ package com.recall.auth.service;
 import com.recall.auth.AppUserPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -44,7 +46,7 @@ public class RecallOidcUserService extends OidcUserService {
             throw new LoginNotAllowedException(email);
         }
 
-        long appUserId = provisioning.resolveOrCreate(provider, subject, email, displayName);
+        long appUserId = resolveOrFailLoudly(provider, subject, email, displayName);
 
         return new AppUserPrincipal(
                 user.getAuthorities(),
@@ -52,6 +54,27 @@ public class RecallOidcUserService extends OidcUserService {
                 user.getUserInfo(),
                 StandardClaimNames.SUB,
                 appUserId);
+    }
+
+    /**
+     * 계정 해석을 부르고, <b>비인증 예외를 인증 예외로 감싼다</b>.
+     *
+     * <p>이 감싸기가 없으면 DB 장애·제약 위반 같은 예외가 {@code AuthenticationException} 이 아닌 채로 올라간다. 그러면 {@code
+     * AbstractAuthenticationProcessingFilter} 의 catch 를 타지 못해 {@code failureHandler} 가 무효가 되고, 스프링
+     * 기본 흰 500 페이지가 나온다 — 실패 URL 을 준 이유가 그 경로에서 사라진다. 감싸면 최소한 {@code /?login_error=failed} 로 가고 화면이
+     * 원인을 말해 준다(조용한 실패 금지).
+     */
+    private long resolveOrFailLoudly(
+            String provider, String subject, String email, String displayName) {
+        try {
+            return provisioning.resolveOrCreate(provider, subject, email, displayName);
+        } catch (AuthenticationException policyRejection) {
+            // 허용목록 거절은 정책이다 — 실패 핸들러가 not_allowed 로 구분해 안내한다.
+            throw policyRejection;
+        } catch (RuntimeException failure) {
+            log.error("로그인 처리 실패 — provider={} subject={}", provider, subject, failure);
+            throw new InternalAuthenticationServiceException("로그인 처리 중 오류가 발생했습니다", failure);
+        }
     }
 
     private static String claim(OidcUser user, String name) {

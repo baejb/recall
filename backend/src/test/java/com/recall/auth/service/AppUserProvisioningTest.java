@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * 🔴 계정이 만들어지는 <b>유일한 경로</b>가 허용목록을 지키는지 고정한다.
@@ -34,8 +35,11 @@ class AppUserProvisioningTest {
 
     private final AppUserRepository users = mock(AppUserRepository.class);
 
+    // AppUserWriter 는 리포지토리를 감싼 트랜잭션 경계뿐이라 실물을 쓴다 — 목으로 바꾸면 이 테스트가
+    // 지키려는 것("계정이 만들어지는 유일한 경로가 허용목록을 지킨다")이 사라진다.
     private AppUserProvisioning provisioning(String... allowed) {
-        return new AppUserProvisioning(users, new AuthProperties(List.of(allowed)));
+        return new AppUserProvisioning(
+                new AppUserWriter(users), new AuthProperties(List.of(allowed)));
     }
 
     @Test
@@ -99,6 +103,23 @@ class AppUserProvisioningTest {
         assertEquals("new@example.com", existing.getEmail());
         assertEquals("새 이름", existing.getDisplayName());
         assertTrue(existing.getLastLoginAt() != null, "로그인 시각이 기록돼야 한다");
+    }
+
+    @Test
+    @DisplayName("동시 첫 로그인 — 유니크 위반이면 먼저 만들어진 행을 쓴다(500 으로 새지 않는다)")
+    void racedFirstLoginReusesTheRowCreatedByTheOtherRequest() {
+        AppUserProvisioning provisioning = provisioning("owner@example.com");
+        AppUser winner = AppUserFixture.persisted(5L, PROVIDER, SUBJECT, "owner@example.com", "주인");
+        // 1회차: 아무도 없다고 보고 insert → 상대가 먼저 넣어 유니크 위반.
+        // 2회차(재시도): 상대가 만든 행이 보인다.
+        when(users.findByProviderAndSubject(PROVIDER, SUBJECT))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winner));
+        when(users.save(any(AppUser.class)))
+                .thenThrow(new DataIntegrityViolationException("uq_app_user_provider_subject"));
+
+        assertEquals(
+                5L, provisioning.resolveOrCreate(PROVIDER, SUBJECT, "owner@example.com", "주인"));
     }
 
     @Test

@@ -55,7 +55,7 @@ recall:
 # 아예 로드되지 않아, 로컬 개발·테스트가 Google 설정 없이 그대로 돌아간다.
 #
 # 프로필이 곧 스위치다 — 로그인·소유자 해석(CurrentUserProvider)·CSRF 가 함께 켜진다.
-# 자세한 이유는 SecurityConfig 의 javadoc.
+# 자세한 이유는 OAuthSecurityConfig 의 javadoc.
 ---
 spring:
   config:

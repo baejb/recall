@@ -7,7 +7,6 @@ import com.recall.common.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,9 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 세션 상태를 화면에 알려주는 창구.
  *
- * <p><b>{@code CsrfToken} 을 파라미터로 받는 이유</b> — CSRF 토큰 쿠키는 토큰을 실제로 <b>읽을 때</b> 발급된다(지연 생성). SPA 는 부팅
- * 직후 {@code /api/me} 를 부르므로 그 자리에서 토큰을 건드려 쿠키가 나가게 한다. 이걸 빼면 첫 상태변경 POST 가 토큰 없이 나가 403 이 되고, 원인이
- * "로그인 문제"처럼 보인다.
+ * <p><b>CSRF 쿠키 발급은 이 컨트롤러의 일이 아니다</b> — 전에는 {@code me} 가 {@code CsrfToken} 을 파라미터로 받아 "토큰을 건드려 쿠키가
+ * 나가게" 했다. 그런데 {@code OAuthSecurityConfig} 의 {@code setCsrfRequestAttributeName(null)} 이 이미 지연 로딩을
+ * 꺼서 매 요청 쿠키가 나가고 있었다. 같은 목적의 장치가 두 곳에 있고 서로를 몰랐고, 이쪽 파라미터는 읽지도 반환하지도 않는 미사용 인자라 린터·리뷰에서 먼저 지워질
+ * 쪽이었다 — 둘 다 지워지면 첫 상태변경 POST 가 403 이 되고 원인이 "로그인 문제"처럼 보인다. 그래서 장치를 설정 쪽 하나로 모았다.
  */
 @RestController
 @RequestMapping("/api")
@@ -38,8 +38,7 @@ public class AuthController {
      * 보인다.
      */
     @GetMapping("/me")
-    public ApiResponse<MeResponse> me(
-            @AuthenticationPrincipal AppUserPrincipal principal, CsrfToken csrfToken) {
+    public ApiResponse<MeResponse> me(@AuthenticationPrincipal AppUserPrincipal principal) {
         if (principal == null) {
             return ApiResponse.ok(new MeResponse(currentUser.currentUserId(), "", "", true));
         }

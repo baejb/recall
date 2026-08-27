@@ -14,6 +14,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * 인증·인가 실패를 <b>공통 응답 형식</b>으로 답한다(필터 단계라 전역 예외 핸들러가 닿지 못하는 자리).
@@ -22,7 +24,10 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  * 로그인 HTML 을 <b>200</b> 으로 받고, 호출부는 "성공했는데 JSON 이 아니다"라는 정체불명의 파싱 실패를 본다. 그래서 API 경로는 상태 코드로 답한다 —
  * 화면이 401 을 보고 로그인으로 보내는 판단을 스스로 하게.
  *
- * <p>HTML 경로(브라우저가 직접 여는 주소)는 다르게 다뤄야 하므로 {@code SecurityConfig} 가 API 경로에만 이 핸들러를 건다.
+ * <p>HTML 경로(브라우저가 직접 여는 주소)는 다르게 다뤄야 하므로 <b>API 경로에만</b> 이 형식으로 답한다. 401 은 스프링이 경로별 진입점을 받아 주므로
+ * ({@code defaultAuthenticationEntryPointFor}) 설정에서 스코프가 잡히지만, <b>403 은 그렇지 않다</b> — {@code
+ * accessDeniedHandler} 는 경로를 받지 않아 전역이다. 그래서 여기서 매처를 받아 직접 가른다. 이 스코프가 없으면 브라우저로 직접 여는 경로의 403
+ * (CSRF 실패가 대표)에서 화면 대신 {@code {"success":false,…}} JSON 이 그대로 노출된다.
  */
 public final class ApiErrorAuthenticationHandlers {
 
@@ -39,10 +44,20 @@ public final class ApiErrorAuthenticationHandlers {
                 write(request, response, ErrorCode.UNAUTHENTICATED, "로그인이 필요합니다", exception);
     }
 
-    /** 403 — 인증은 됐지만 이 요청이 허용되지 않는다. */
-    public static AccessDeniedHandler accessDeniedHandler() {
-        return (request, response, exception) ->
-                write(request, response, ErrorCode.FORBIDDEN, "허용되지 않은 요청입니다", exception);
+    /**
+     * 403 — 인증은 됐지만 이 요청이 허용되지 않는다(대표 사례: CSRF 토큰 불일치).
+     *
+     * @param apiPaths JSON 으로 답할 경로. 그 밖(브라우저가 직접 여는 HTML 경로)은 스프링 기본 403 처리에 맡긴다
+     */
+    public static AccessDeniedHandler accessDeniedHandler(RequestMatcher apiPaths) {
+        AccessDeniedHandler htmlDefault = new AccessDeniedHandlerImpl();
+        return (request, response, exception) -> {
+            if (!apiPaths.matches(request)) {
+                htmlDefault.handle(request, response, exception);
+                return;
+            }
+            write(request, response, ErrorCode.FORBIDDEN, "허용되지 않은 요청입니다", exception);
+        };
     }
 
     private static void write(

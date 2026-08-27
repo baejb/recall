@@ -17,7 +17,7 @@ function loginError(): 'not_allowed' | 'failed' | undefined {
 }
 
 export default function App() {
-  const { state, logout } = useSession()
+  const { state, logout, retry } = useSession()
 
   // 세션 확인 전에는 아무 화면도 그리지 않는다 — 이미 로그인한 사용자에게 로그인 화면이 깜빡이면
   // "로그아웃됐나?"로 읽히고, 반대로 앱을 먼저 그리면 빈 목록이 "기억이 없다"로 보인다.
@@ -39,7 +39,10 @@ export default function App() {
           <div className="eyebrow">연결 실패</div>
           <h1 className="h1">서버에 닿지 못했어요</h1>
           <p className="lede">{state.message}</p>
-          <button className="btn primary" onClick={() => window.location.reload()}>
+          {/* `retry` 는 세션 확인만 다시 한다. `window.location.reload()` 로 앱을 통째로 다시 띄우면
+              입력 중이던 상태를 버린다 — capture 붙여넣기 화면에서 세션 확인이 실패한 뒤 재시도하면
+              붙여넣은 원문이 날아간다. useSession 이 이 API 를 내주는 이유가 그것이다. */}
+          <button className="btn primary" onClick={retry}>
             다시 시도
           </button>
         </section>

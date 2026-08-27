@@ -15,8 +15,14 @@ import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
  * 번 나간다. 로그인 시점에 한 번 해석해 세션에 담아 두면 그 조회가 사라진다.
  *
  * <p>세션에 담기므로 {@link DefaultOidcUser} 의 직렬화 계약을 그대로 물려받는다(필드는 {@code long} 하나만 더한다).
+ *
+ * <p><b>{@code serialVersionUID} 를 명시하는 이유</b> — 없으면 컴파일러가 필드 구성으로부터 값을 유도한다. 인메모리 세션에서는 영향이 없지만,
+ * JDBC 세션으로 옮긴 뒤 이 클래스에 필드를 하나 추가하면 그 값이 바뀌어 <b>살아 있는 세션이 전부 역직렬화에 실패한다</b>(배포 직후 전원 로그아웃, 또는 500).
+ * 값을 고정해 두면 실제로 호환이 깨지는 변경에서만 우리가 의도적으로 올린다.
  */
 public class AppUserPrincipal extends DefaultOidcUser {
+
+    private static final long serialVersionUID = 1L;
 
     private final long appUserId;
 
