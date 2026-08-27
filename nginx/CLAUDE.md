@@ -23,10 +23,15 @@ nginx는 **호스트에서** 구동한다(개발용 Docker Compose는 DB만 띄�
   (`try_files $uri /index.html`)이 로그인 시작 주소와 **Google 콜백의 authorization code** 를 SPA HTML 로
   삼킨다. 백엔드에 닿지 않으므로 세션이 만들어지지 않고, 증상은 "로그인했는데 로그인 화면"이다 — 콘솔·
   네트워크 탭에 에러가 없어 원인이 드러나지 않는다(조용한 실패). 백엔드 `PUBLIC_PATHS` 에 이 경로를 연
-  것은 **백엔드 필터 체인 안에서만** 유효하다. dev 는 `frontend/vite.config.ts` 의 `BACKEND_PATHS` 가
-  같은 목록을 갖는다 — 한쪽만 고치지 않는다.
-- **OAuth 경로에는 `Host`·`X-Forwarded-*` 를 넘긴다**: 스프링이 이 값으로 `redirect_uri` 를 만든다.
-  어긋나면 Google 이 `redirect_uri_mismatch` 로 거절한다.
+  것은 **백엔드 필터 체인 안에서만** 유효하다. dev 는 `frontend/vite.config.ts` 의 `API_PATHS`·
+  `OAUTH_PATHS` 가 같은 목록을 갖는다 — 한쪽만 고치지 않는다.
+- **🔴 OAuth 경로는 원래 `Host` 를 그대로 넘긴다**: 스프링이 요청의 Host 로 `redirect_uri` 를 만든다.
+  nginx 는 `proxy_set_header Host $host`(+`X-Forwarded-*`), dev 의 vite 는 **`changeOrigin: false`** 다.
+  바꿔 보내면 `redirect_uri` 가 프록시 대상 주소가 된다 — dev 에서 실제로 겪었다: `changeOrigin: true`
+  면 `redirect_uri=http://localhost:8080/...` 이 되어 Google 이 브라우저를 백엔드 포트로 되돌리고,
+  콜백은 처리되지만(세션 쿠키는 포트를 무시해 살아 있다) 로그인 성공 후 `/` 가 SPA 없는 :8080 이라
+  **빈 화면**에 떨어진다("로그인은 됐는데 아무것도 안 보인다"). 배포에서는 어긋난 `redirect_uri` 를
+  Google 이 `redirect_uri_mismatch` 로 거절한다.
 - **API 호스트 하드코딩 금지**: 프론트는 상대경로 `/api`로만 호출한다. 백엔드 주소 변경은 nginx
   `proxy_pass` 한 곳에서 흡수한다.
 - **비밀 금지**: 설정 파일에 키·토큰을 넣지 않는다.

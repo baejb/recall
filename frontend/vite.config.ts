@@ -12,7 +12,15 @@ import { dirname, resolve } from 'node:path'
 // 빠지면 vite 가 `index.html` 을 200 으로 돌려주므로 콘솔·네트워크 탭에 에러가 없고, 로그인 버튼을
 // 눌러도 로그인 화면이 다시 그려지기만 한다(조용한 실패). 백엔드 `PUBLIC_PATHS` 에 이 경로를 연 것은
 // 백엔드 필터 체인 안에서만 유효해서, 요청이 백엔드까지 오지 못하면 아무 의미가 없다.
-const BACKEND_PATHS = ['/api', '/oauth2', '/login']
+//
+// **OAuth 경로는 `changeOrigin` 을 켜지 않는다.** 스프링이 요청의 Host 로 `redirect_uri` 를 만들기
+// 때문이다. 켜면 Host 가 프록시 대상(:8080)으로 바뀌어 `redirect_uri=http://localhost:8080/...` 이
+// 되고, Google 이 브라우저를 :8080 으로 되돌린다. 콜백 자체는 처리되지만(세션 쿠키는 포트를 무시하니
+// 살아 있다) 로그인 성공 후 `/` 로 가는 곳이 SPA 가 없는 :8080 이라 빈 화면에 떨어진다 — "로그인은
+// 됐는데 아무것도 안 보인다". Host 를 그대로 넘기면 `redirect_uri` 가 :3000 이고 콜백도 이 프록시를
+// 다시 타므로 dev 에서 왕복이 닫힌다. 배포(nginx)는 `Host $host` 를 넘겨 같은 성질을 지킨다.
+const API_PATHS = ['/api']
+const OAUTH_PATHS = ['/oauth2', '/login']
 
 export default defineConfig(({ mode }) => {
   const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -24,9 +32,10 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       port: frontendPort,
-      proxy: Object.fromEntries(
-        BACKEND_PATHS.map((path) => [path, { target, changeOrigin: true }])
-      ),
+      proxy: Object.fromEntries([
+        ...API_PATHS.map((path) => [path, { target, changeOrigin: true }]),
+        ...OAUTH_PATHS.map((path) => [path, { target, changeOrigin: false }]),
+      ]),
     },
   }
 })
