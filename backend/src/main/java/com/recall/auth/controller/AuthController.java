@@ -50,8 +50,13 @@ public class AuthController {
     /**
      * 로그아웃 — 세션을 무효화한다.
      *
-     * <p>Spring Security 의 기본 {@code /logout} 대신 {@code /api} 아래 두는 이유: 프론트가 쓰는 모든 경로가 {@code /api}
-     * 로 프록시되므로(dev 는 vite, 배포는 nginx) 로그아웃만 다른 경로에 두면 프록시 규칙을 하나 더 만들어야 한다. 응답도 공통 형식으로 맞춘다.
+     * <p>Spring Security 의 기본 {@code /logout} 대신 {@code /api} 아래 두는 이유: 프론트가 {@code fetch} 로 부르는
+     * 호출이므로 응답이 <b>공통 응답 형식</b>이어야 한다. 기본 {@code /logout} 은 리다이렉트로 답해서, SPA 의 호출부가 "성공했는데 JSON 이
+     * 아니다"라는 정체불명의 파싱 실패를 본다.
+     *
+     * <p>전에 이 자리에 "프론트가 쓰는 모든 경로가 {@code /api} 로 프록시되므로 프록시 규칙을 하나 더 만들지 않으려고"라고 적혀 있었는데, 그 전제는 사실이
+     * 아니었다 — 로그인 시작({@code /oauth2/**})과 콜백({@code /login/**})이 이미 {@code /api} 밖이고, 오히려 그 규칙이 없어서
+     * 로그인이 백엔드에 닿지 못했다. 지금은 세 경로를 모두 프록시한다({@code nginx/CLAUDE.md}).
      */
     @PostMapping("/auth/logout")
     public ApiResponse<Void> logout(HttpServletRequest request) {
