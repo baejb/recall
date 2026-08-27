@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ts-error-with-stacktrace",
+    "input": "배포하고 나서 컨테이너가 5분마다 죽는다. 로그에 Killed process 1 (java) 랑 exit 137 이 찍혔다. docker restart 해봤는데 또 죽었고, heap dump 떠보니 누수는 없었다. 결국 메모리 한도를 4GB로 올리고 MaxRAMPercentage=75 줬더니 멈췄다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "ts-symptom-only-unresolved",
+    "input": "로컬에서는 되는데 CI 에서만 테스트가 전부 ClassNotFoundException 으로 실패한다. 아직 원인 모르겠다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "ts-korean-narrative-no-code",
+    "input": "어제부터 로그인하면 자꾸 튕겨서 세션 설정을 뒤졌다. 쿠키 도메인이 다르게 박혀 있었고 그거 맞추니까 해결됐다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "ts-permission-denied",
+    "input": "볼륨 마운트한 경로에 쓰기가 안 된다. permission denied 나는데 chown 으로 uid 맞춰주니 됐다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "ts-partial-workaround",
+    "input": "간헐적으로 502 가 뜬다. keepalive 타임아웃을 늘려서 빈도는 줄었는데 완전히 없어지진 않았다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "ts-regression-after-fix",
+    "input": "지난주에 커넥션 풀 크기 올려서 고쳤다고 생각했는데, 오늘 같은 타임아웃이 또 났다. 풀 설정은 그대로다.",
+    "expectedType": "TROUBLESHOOTING"
+  },
+  {
+    "id": "kn-concept-definition",
+    "input": "RRF(Reciprocal Rank Fusion)는 여러 검색 채널의 순위 리스트를 합칠 때 각 후보의 순위 역수를 더해 최종 순위를 만드는 방법이다. 점수 스케일이 다른 채널을 정규화 없이 합칠 수 있는 게 장점이다.",
+    "expectedType": "KNOWLEDGE"
+  },
+  {
+    "id": "kn-comparison",
+    "input": "tsvector 는 어휘 기반이라 정확한 토큰을 잘 찾고, 벡터 임베딩은 표현이 달라도 의미가 비슷한 걸 찾는다. 둘은 경쟁이 아니라 상호 보완이라 하이브리드로 쓴다.",
+    "expectedType": "KNOWLEDGE"
+  },
+  {
+    "id": "kn-decision-record",
+    "input": "격리 방식은 db-per-user 를 기각하고 공유 DB + user_id 파티셔닝으로 갔다. 사용자 수가 적고 백업·마이그레이션 비용이 사용자 수만큼 늘어나는 걸 피하려는 판단이었다.",
+    "expectedType": "KNOWLEDGE"
+  },
+  {
+    "id": "kn-howto-no-incident",
+    "input": "Flyway 마이그레이션은 기존 파일을 수정하지 않고 항상 새 버전을 추가하는 방식으로 쓴다. 적용된 파일을 고치면 체크섬이 어긋나 부팅이 막힌다.",
+    "expectedType": "KNOWLEDGE"
+  },
+  {
+    "id": "kn-error-mentioned-as-example",
+    "input": "NullPointerException 처럼 예외 클래스명은 정확 토큰 매칭이 잘 먹는 검색 대상이다. 반대로 '널 터졌을 때' 같은 표현은 벡터 검색이 잡는다.",
+    "expectedType": "KNOWLEDGE"
+  },
+  {
+    "id": "kn-api-contract-note",
+    "input": "SSE 응답은 Accept: text/event-stream 으로 협상되고, 에러 응답은 협상 대상이 아니라 항상 JSON 으로 내려야 한다.",
+    "expectedType": "KNOWLEDGE"
+  }
+]

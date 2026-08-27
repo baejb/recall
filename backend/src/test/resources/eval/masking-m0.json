@@ -1,0 +1,204 @@
+[
+  {
+    "id": "openai-project-key",
+    "input": "설정에 OPENAI 키를 박아뒀다: sk-proj-AbCdEf0123456789XyZwVu987654",
+    "secrets": ["sk-proj-AbCdEf0123456789XyZwVu987654"],
+    "expect": ["API_KEY"]
+  },
+  {
+    "id": "openai-legacy-key",
+    "input": "curl -H \"Authorization: Bearer sk-Ab12Cd34Ef56Gh78Ij90Kl12\" https://api.openai.com/v1/models",
+    "secrets": ["sk-Ab12Cd34Ef56Gh78Ij90Kl12"],
+    "expect": ["API_KEY"]
+  },
+  {
+    "id": "anthropic-key",
+    "input": "ANTHROPIC 키 sk-ant-api03-Zz99Yy88Xx77Ww66Vv55Uu44 로 붙였는데 401",
+    "secrets": ["sk-ant-api03-Zz99Yy88Xx77Ww66Vv55Uu44"],
+    "expect": ["API_KEY"]
+  },
+  {
+    "id": "google-api-key",
+    "input": "AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r 를 프론트 번들에 넣어버렸다",
+    "secrets": ["AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r"],
+    "expect": ["API_KEY"]
+  },
+  {
+    "id": "github-pat-classic",
+    "input": "ghp_1234567890abcdefghijABCDEFGHIJ12 로 clone 하면 403",
+    "secrets": ["ghp_1234567890abcdefghijABCDEFGHIJ12"],
+    "expect": ["TOKEN"]
+  },
+  {
+    "id": "github-pat-fine-grained",
+    "input": "github_pat_11ABCDE0123456789_abcdefghijKLMNOPQRST 로 바꿔도 같음",
+    "secrets": ["github_pat_11ABCDE0123456789_abcdefghijKLMNOPQRST"],
+    "expect": ["TOKEN"]
+  },
+  {
+    "id": "aws-access-key",
+    "input": "AKIAIOSFODNN7EXAMPLE 로 s3 접근하다 막혔다",
+    "secrets": ["AKIAIOSFODNN7EXAMPLE"],
+    "expect": ["AWS_KEY"]
+  },
+  {
+    "id": "slack-bot-token",
+    "input": "xoxb-EXAMPLE-NOT-A-REAL-TOKEN-FOR-EVAL 이 만료됐다",
+    "secrets": ["xoxb-EXAMPLE-NOT-A-REAL-TOKEN-FOR-EVAL"],
+    "expect": ["TOKEN"]
+  },
+  {
+    "id": "jwt",
+    "input": "토큰이 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c 인데 exp 가 지났다",
+    "secrets": ["eyJhbGciOiJIUzI1NiJ9", "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"],
+    "expect": ["JWT"]
+  },
+  {
+    "id": "pem-private-key",
+    "input": "키 파일 내용:\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxGf1\nQkJ9bTk2vQ==\n-----END RSA PRIVATE KEY-----\n이걸 커밋해버렸다",
+    "secrets": ["MIIEowIBAAKCAQEAxGf1", "QkJ9bTk2vQ=="],
+    "expect": ["PRIVATE_KEY"]
+  },
+  {
+    "id": "env-style-api-key",
+    "input": "RECALL_LLM_API_KEY=super-secret-value-1234 를 .env 에 넣었다",
+    "secrets": ["super-secret-value-1234"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "yaml-style-quoted-secret",
+    "input": "application.yml 에 client_secret: \"GOCSPX-abcdefghijklmnop\" 를 그대로 뒀다",
+    "secrets": ["GOCSPX-abcdefghijklmnop"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "header-style-api-key",
+    "input": "요청 헤더: x-api-key: 9f8e7d6c5b4a3210",
+    "secrets": ["9f8e7d6c5b4a3210"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "db-password-key-value",
+    "input": "POSTGRES_PASSWORD=hunter2-prod 로 배포돼 있었다",
+    "secrets": ["hunter2-prod"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-password-label",
+    "input": "관리자 비밀번호: Adm1n!Pass2026 로 로그인했더니 됐다",
+    "secrets": ["Adm1n!Pass2026"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-token-label",
+    "input": "토큰=ghsecrettokenvalue123 을 슬랙에 붙여넣었다",
+    "secrets": ["ghsecrettokenvalue123"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "short-pass-key-name",
+    "input": "db_pass=p4ssw0rd-here 로 접속했다",
+    "secrets": ["p4ssw0rd-here"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "passphrase-key-name",
+    "input": "passphrase=my-secret-value-1 로 키를 풀었다",
+    "secrets": ["my-secret-value-1"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-token-suffix-label",
+    "input": "토큰값: abcdefghijklmnop1234 을 붙여넣었다",
+    "secrets": ["abcdefghijklmnop1234"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-password-suffix-label",
+    "input": "암호키=hunter2 로 접속했다",
+    "secrets": ["hunter2"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-password-spaced-label",
+    "input": "비밀번호 확인: Adm1n!Pass2026 까지 입력했다",
+    "secrets": ["Adm1n!Pass2026"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "numeric-password-certain-key",
+    "input": "POSTGRES_PASSWORD=12345678 로 되어 있었다",
+    "secrets": ["12345678"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "email",
+    "input": "담당자 jbbae@proten.co.kr 에게 물어봤다",
+    "secrets": ["jbbae@proten.co.kr"],
+    "expect": ["email"]
+  },
+  {
+    "id": "multiple-secrets-one-text",
+    "input": "OPENAI_API_KEY=sk-proj-Aa11Bb22Cc33Dd44Ee55Ff66 이고 담당자는 ops@example.com, 토큰은 ghp_zzzz1111yyyy2222xxxx3333ww 다",
+    "secrets": [
+      "sk-proj-Aa11Bb22Cc33Dd44Ee55Ff66",
+      "ops@example.com",
+      "ghp_zzzz1111yyyy2222xxxx3333ww"
+    ],
+    "expect": ["API_KEY", "email", "TOKEN"]
+  },
+  {
+    "id": "secret-inside-stacktrace",
+    "input": "java.lang.RuntimeException: 401 from provider (key=sk-ant-api03-Qq11Ww22Ee33Rr44Tt55Yy66)\n\tat com.recall.llm.provider.anthropic.AnthropicLlmClient.complete(AnthropicLlmClient.java:52)",
+    "secrets": ["sk-ant-api03-Qq11Ww22Ee33Rr44Tt55Yy66"],
+    "expect": ["API_KEY"]
+  },
+  {
+    "id": "negative-ordinary-assignment",
+    "input": "재시도 횟수를 retryCount=3 으로 올렸더니 통과했다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-word-containing-pass",
+    "input": "테스트가 passing=true 로 바뀌었고 passed=12 였다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-key-name-containing-pass",
+    "input": "bypass=true 로 두고 pass_rate=0.9 로 측정했다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-korean-token",
+    "input": "최대 토큰: 4096 으로 올렸더니 통과했다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-english-token",
+    "input": "max_tokens=4096 으로 올리고 다시 돌렸다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-cipher",
+    "input": "암호: AES-256-GCM 으로 바꾼 뒤에도 같은 오류가 났다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-short-sk-prefix",
+    "input": "변수명을 sk-id 로 줄여 썼다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-plain-error-log",
+    "input": "컨테이너가 exit 137 로 죽었다. OOMKilled 로 보인다.",
+    "secrets": [],
+    "expect": []
+  }
+]
