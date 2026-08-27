@@ -102,6 +102,36 @@
     "expect": ["SECRET"]
   },
   {
+    "id": "passphrase-key-name",
+    "input": "passphrase=my-secret-value-1 로 키를 풀었다",
+    "secrets": ["my-secret-value-1"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-token-suffix-label",
+    "input": "토큰값: abcdefghijklmnop1234 을 붙여넣었다",
+    "secrets": ["abcdefghijklmnop1234"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-password-suffix-label",
+    "input": "암호키=hunter2 로 접속했다",
+    "secrets": ["hunter2"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "korean-password-spaced-label",
+    "input": "비밀번호 확인: Adm1n!Pass2026 까지 입력했다",
+    "secrets": ["Adm1n!Pass2026"],
+    "expect": ["SECRET"]
+  },
+  {
+    "id": "numeric-password-certain-key",
+    "input": "POSTGRES_PASSWORD=12345678 로 되어 있었다",
+    "secrets": ["12345678"],
+    "expect": ["SECRET"]
+  },
+  {
     "id": "email",
     "input": "담당자 jbbae@proten.co.kr 에게 물어봤다",
     "secrets": ["jbbae@proten.co.kr"],
@@ -132,6 +162,30 @@
   {
     "id": "negative-word-containing-pass",
     "input": "테스트가 passing=true 로 바뀌었고 passed=12 였다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-key-name-containing-pass",
+    "input": "bypass=true 로 두고 pass_rate=0.9 로 측정했다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-korean-token",
+    "input": "최대 토큰: 4096 으로 올렸더니 통과했다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-english-token",
+    "input": "max_tokens=4096 으로 올리고 다시 돌렸다",
+    "secrets": [],
+    "expect": []
+  },
+  {
+    "id": "negative-domain-word-cipher",
+    "input": "암호: AES-256-GCM 으로 바꾼 뒤에도 같은 오류가 났다",
     "secrets": [],
     "expect": []
   },

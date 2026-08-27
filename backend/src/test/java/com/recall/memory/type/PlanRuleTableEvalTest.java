@@ -27,7 +27,10 @@ import org.junit.jupiter.api.Test;
  *       강하다")가 값에 반영돼 있는지 보는 것이다. 값 자체는 라벨셋 fit 대상이지만 <b>우열 관계가 뒤집히면</b> 그건 튜닝이 아니라 설계 위반이다.
  * </ol>
  *
- * <p>새 유형을 붙이면 이 테스트가 먼저 실패해야 한다 — 그래서 유형 목록을 여기 명시한다(자동 수집하면 유형을 빠뜨린 채 초록이 된다).
+ * <p><b>새 유형을 붙이면 이 테스트가 먼저 실패해야 한다</b> — 그래서 커버리지 검사는 규칙표가 아니라 {@link MemoryType#values()} 를 순회한다.
+ * 규칙표만 순회하면 {@code MemoryType} 에 값을 추가하고 {@link PlanContribution} 구현을 빠뜨려도 세 검사가 모두 초록이고, 빠진 유형은
+ * {@code StrategyRegistry.get} 이 런타임에 터질 때에야 드러난다. 유형의 완전한 목록은 enum 자신이므로 순회해도 빠뜨릴 수 없다(전략 목록을 자동
+ * 수집하는 것과는 다르다 — 그쪽은 등록 누락이 곧 목록 누락이라 초록이 된다).
  */
 class PlanRuleTableEvalTest {
 
@@ -35,12 +38,25 @@ class PlanRuleTableEvalTest {
     private static final List<SearchChannel> IMPLEMENTED_CHANNELS =
             List.of(SearchChannel.MEMORY_VECTOR, SearchChannel.MEMORY_BM25);
 
-    /** 규칙표. 유형이 늘면 여기에 한 줄 추가해야 커버리지 검사가 통과한다. */
+    /** 규칙표. 유형이 늘면 여기에 한 줄 추가해야 {@link #everyTypeHasAPlan()} 이 통과한다. */
     private static final Map<MemoryType, PlanContribution> RULE_TABLE =
             new EnumMap<>(
                     Map.of(
                             MemoryType.KNOWLEDGE, new KnowledgePlanContribution(),
                             MemoryType.TROUBLESHOOTING, new TroubleshootingPlanContribution()));
+
+    @Test
+    @DisplayName("커버리지 — 모든 MemoryType 이 규칙표에 있다(유형 추가 시 여기서 먼저 빨개진다)")
+    void everyTypeHasAPlan() {
+        for (MemoryType type : MemoryType.values()) {
+            assertTrue(
+                    RULE_TABLE.containsKey(type),
+                    () ->
+                            type
+                                    + " 에 PlanContribution 이 없다 — 이 유형으로 검색하면 StrategyRegistry.get 이"
+                                    + " 런타임에 터진다. 유형 패키지에 구현을 추가하고 이 규칙표에 등록하라.");
+        }
+    }
 
     @Test
     @DisplayName("커버리지 — 규칙표의 전략이 자기 유형을 정확히 담당한다")
