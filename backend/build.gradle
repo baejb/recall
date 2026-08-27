@@ -39,7 +39,31 @@ dependencies {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	// llm-eval 태그는 실제 provider 를 호출한다(API 키 필요·비용 발생·비결정적) → 기본 test 와 CI 에서 제외.
+	// PR 마다 돌리면 진짜 회귀가 아닌 이유로(모델 출력 변동) 빨개지고, 그 소음이 게이트를 무력화한다.
+	useJUnitPlatform {
+		excludeTags 'llm-eval'
+	}
+}
+
+// 🔵 LLM 품질 Eval 만 실행: ./gradlew llmEval
+// 실제 provider 를 호출해 단계별 품질을 라벨셋으로 채점한다(PRD §7 — C 유형 라우팅·S2 추출·S4 판정).
+// 프롬프트를 고친 직후에 사람이 돌린다. 키는 env 로: RECALL_LLM_PROVIDER·RECALL_LLM_API_KEY·RECALL_LLM_MODEL_STRONG.
+// 키가 없으면 각 테스트가 assumption 으로 스킵된다(실패가 아니라 "안 돌았음"으로 드러난다).
+tasks.register('llmEval', Test) {
+	description = 'LLM 품질 Eval(🔵) — 실제 provider 호출. 키 없으면 스킵'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'llm-eval'
+	}
+	// 모델 응답을 그대로 봐야 채점 결과를 해석할 수 있다.
+	testLogging {
+		showStandardStreams = true
+		events 'passed', 'skipped', 'failed'
+	}
+	outputs.upToDateWhen { false } // 같은 입력이어도 모델 출력이 달라지므로 캐시하지 않는다.
 }
 
 // 🔴 릴리스 차단 게이트만 실행: ./gradlew releaseGate
@@ -53,6 +77,17 @@ tasks.register('releaseGate', Test) {
 	useJUnitPlatform {
 		includeTags 'release-gate'
 	}
+}
+
+// 부트스트랩 모드(인증 없음)는 명시적 opt-in 이 있어야 부팅된다(BootstrapModeGuard).
+// opt-in 값을 여기서만 주는 이유: .env.example 은 복사해서 배포하는 템플릿이라 거기 적으면 무인증이
+// 배포까지 따라오고 플래그 이름만 바뀐 같은 구멍이 된다. bootRun·test 는 개발 실행 경로이고,
+// 배포 산출물(bootJar)은 이 경로를 거치지 않으므로 아무것도 물려받지 않는다.
+tasks.withType(Test).configureEach {
+	environment 'RECALL_BOOTSTRAP_MODE', 'true'
+}
+tasks.named('bootRun') {
+	environment 'RECALL_BOOTSTRAP_MODE', 'true'
 }
 
 // 기존 코드가 4칸 들여쓰기이므로 google-java-format 의 AOSP(4칸) 스타일로 맞춘다.

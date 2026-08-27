@@ -1,0 +1,38 @@
+[
+  {
+    "id": "gap-basic-auth-header",
+    "input": "Authorization: Basic dXNlcjpzdXBlcnNlY3JldA==",
+    "secrets": ["dXNlcjpzdXBlcnNlY3JldA=="],
+    "why": "Basic 은 base64(user:pass) 라 값 자체에 비밀번호가 들어 있다. Bearer 규칙은 Basic 을 잡지 않는다."
+  },
+  {
+    "id": "gap-connection-string-password",
+    "input": "jdbc:postgresql://recall:hunter2prod@db.internal:5432/recall 로 붙었다",
+    "secrets": ["hunter2prod"],
+    "why": "URL 인증정보는 KEY=VALUE 모양이 아니다(구분자가 : 와 @). URL 파싱 규칙이 따로 필요하다."
+  },
+  {
+    "id": "gap-webhook-url",
+    "input": "https://hooks.example.invalid/services/T0EXAMPLE/B0EXAMPLE/EXAMPLE-NOT-A-REAL-WEBHOOK 로 알림 보냈다",
+    "secrets": ["EXAMPLE-NOT-A-REAL-WEBHOOK"],
+    "why": "웹훅 URL 은 그 자체가 자격증명이다. 호스트별 규칙이 필요하고, 일반 URL 을 다 가리면 원문이 망가진다."
+  },
+  {
+    "id": "gap-korean-sentence-form",
+    "input": "비밀번호는 Adm1n!Pass2026 입니다",
+    "secrets": ["Adm1n!Pass2026"],
+    "why": "구분자(:·=)가 없는 문장형. 값의 경계를 결정론으로 정할 수 없다 — '입니다'까지 가릴지 판단이 필요하다."
+  },
+  {
+    "id": "gap-bare-high-entropy",
+    "input": "이 값으로 됐다: 9f8c2b7a4e1d6035af92be74cc180d3e",
+    "secrets": ["9f8c2b7a4e1d6035af92be74cc180d3e"],
+    "why": "키 이름이 없는 고엔트로피 문자열. 엔트로피만으로 가리면 커밋 해시·에러 시그니처·UUID 까지 가려 트러블슈팅 카드가 무의미해진다."
+  },
+  {
+    "id": "gap-personal-identifiers",
+    "input": "연락처 010-1234-5678, 주민번호 900101-1234567 로 등록돼 있었다",
+    "secrets": ["010-1234-5678", "900101-1234567"],
+    "why": "PRD 마스킹 범위는 자격증명 중심이다. 개인정보(PII)를 범위에 넣을지는 제품 결정이라 임의로 확대하지 않았다."
+  }
+]

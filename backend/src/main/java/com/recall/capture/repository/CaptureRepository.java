@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /** capture 저장/조회 창구. JpaRepository 상속만으로 save/findById/findAll 등이 자동 제공된다. */
 public interface CaptureRepository extends JpaRepository<Capture, Long> {
+    /** 이 사용자가 소유한 capture 건수(부팅 안내용 — 상태와 무관하게 전부 센다). */
+    long countByUserId(long userId);
 
     /** 처리 중/실패한(아직 검토 대기함에 오르지 않은) 캡처를 최신순으로 — 상태 노출 엔드포인트용(사용자 스코프). */
     List<Capture> findByUserIdAndStatusInOrderByCreatedAtDesc(

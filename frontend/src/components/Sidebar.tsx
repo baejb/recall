@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import type { MeResponse } from '../api/dto'
 import { useRecall } from '../hooks/useRecall'
 
 function navClass({ isActive }: { isActive: boolean }): string {
@@ -23,8 +24,13 @@ function LogoMark() {
   )
 }
 
-/** 좌측 내비게이션. 핵심 흐름(물어보기·붙여넣기·검토함·내 기억)만 노출한다. 아이콘은 얇은 단색 라인으로 통일. */
-export function Sidebar() {
+/**
+ * 좌측 내비게이션. 핵심 흐름(물어보기·붙여넣기·검토함·내 기억)만 노출한다. 아이콘은 얇은 단색 라인으로 통일.
+ *
+ * 하단 사용자 칩은 **실제 세션**을 보여준다(전에는 목업 이름·이메일이 하드코딩돼 있었다). 부트스트랩
+ * 모드에서는 "인증 없음"을 그대로 표시한다 — 그 사실을 숨기면 열려 있는 인스턴스가 정상처럼 보인다.
+ */
+export function Sidebar({ me, onLogout }: { me: MeResponse; onLogout: () => void }) {
   const { reviewCount } = useRecall()
   return (
     <aside className="side">
@@ -78,13 +84,33 @@ export function Sidebar() {
       </NavLink>
 
       <div className="spacer" />
-      <div className="userchip">
-        <div className="av">이</div>
-        <div>
-          <div className="who">이혜린 · 신입 개발자</div>
-          <div className="mail">hrlee@proten.co.kr</div>
+
+      {me.bootstrapMode ? (
+        <div className="userchip" title="로그인 없이 단일 사용자로 동작 중입니다">
+          <div className="av warnav">!</div>
+          <div className="userinfo">
+            <div className="who">인증 없음 · 단일 사용자</div>
+            <div className="mail">app_user #{me.userId}</div>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="userchip">
+          <div className="av">{initial(me)}</div>
+          <div className="userinfo">
+            <div className="who">{me.displayName || me.email}</div>
+            <div className="mail">{me.email}</div>
+          </div>
+          <button type="button" className="chipbtn" onClick={onLogout}>
+            로그아웃
+          </button>
+        </div>
+      )}
     </aside>
   )
+}
+
+/** 아바타에 넣을 한 글자 — 이름이 없으면 이메일 첫 글자. */
+function initial(me: MeResponse): string {
+  const source = me.displayName || me.email
+  return source ? source.slice(0, 1).toUpperCase() : '?'
 }

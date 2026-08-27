@@ -8,6 +8,7 @@ import type {
   CaptureStatusResponse,
   CatalogResponse,
   MemoryDetailResponse,
+  MeResponse,
   MemoryPage,
   ReviewCountResponse,
   ReviewItemResponse,
@@ -44,11 +45,66 @@ export class ApiRequestError extends Error {
   get isNotFound(): boolean {
     return this.status === 404 || this.code === 'NOT_FOUND'
   }
+
+  /** 로그인이 필요하다(세션 없음·만료). 화면은 로그인으로 되돌린다. */
+  get isUnauthenticated(): boolean {
+    return this.status === 401 || this.code === 'UNAUTHENTICATED'
+  }
+
+  /**
+   * 인증은 됐지만 이 요청이 허용되지 않았다. 실제로 이 코드가 오는 경로는 **CSRF 토큰 불일치**다
+   * (세션이 재시작으로 갈렸거나 쿠키가 지워진 경우).
+   *
+   * 허용목록 밖 계정은 403 이 아니다 — 백엔드가 `/?login_error=not_allowed` 로 302 리다이렉트하고
+   * 로그인 화면이 배너를 띄운다. 그 계약을 여기 적어 두면 없는 분기를 짜게 된다.
+   *
+   * 로그인 루프에 빠뜨리지 않는다: 401 과 달리 다시 로그인해도 해결되지 않는다.
+   */
+  get isForbidden(): boolean {
+    return this.status === 403 || this.code === 'FORBIDDEN'
+  }
 }
+
+/**
+ * 세션이 끊긴 것을 앱 전체에 알리는 이벤트.
+ *
+ * 401 은 어느 호출에서든 날 수 있고(세션 만료), 그때마다 호출부가 "로그인으로 보내기"를 각자 구현하면
+ * 빠뜨리는 화면이 생긴다. 요청 창구 한 곳에서 이벤트로 알리고 앱 루트가 받아 로그인 화면으로 돌린다.
+ */
+export const UNAUTHENTICATED_EVENT = 'recall:unauthenticated'
+
+/**
+ * CSRF 토큰 — 세션 기반 인증이라 상태변경 요청에 필요하다.
+ *
+ * 백엔드가 `XSRF-TOKEN` 쿠키로 내려보내고(httpOnly=false) 우리가 `X-XSRF-TOKEN` 헤더로 돌려준다.
+ * 백엔드가 지연 생성을 끄기 때문에(`setCsrfRequestAttributeName(null)`) 쿠키는 **어느 요청에서든**
+ * 나간다 — 특정 호출(`/api/me`)에 매인 것이 아니다.
+ * 부트스트랩 모드에서는 CSRF 가 꺼져 있어 쿠키가 없고, 그때는 헤더를 붙이지 않는다.
+ */
+function csrfHeaders(method: string): Record<string, string> {
+  // GET·HEAD 는 상태를 바꾸지 않아 CSRF 대상이 아니다.
+  if (method === 'GET' || method === 'HEAD') return {}
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
+  return match ? { 'X-XSRF-TOKEN': decodeURIComponent(match[1]) } : {}
+}
+
+/**
+ * 403 일 때 화면에 띄울 메시지.
+ *
+ * 백엔드의 "허용되지 않은 요청입니다" 는 원인을 말해 주지 않는다. 이 앱에서 실제로 403 이 나는 경로는
+ * **CSRF 토큰 불일치**이고(서버 재시작으로 세션이 갈렸거나 쿠키가 지워진 경우), 그때 일반 에러 토스트만
+ * 뜨면 증상이 "저장이 가끔 안 됨" 으로 보여 원인을 찾을 수 없다. 사용자가 할 수 있는 행동을 알려준다
+ * (조용한 실패 금지).
+ */
+const FORBIDDEN_MESSAGE =
+  '보안 토큰이 맞지 않아 요청이 거부됐어요. 페이지를 새로고침한 뒤 다시 시도해 주세요.'
 
 /**
  * 응답 본문(봉투)에서 실패를 읽어 `ApiRequestError` 를 만든다. 봉투가 없거나 깨졌으면(프록시 에러 페이지,
  * 네트워크 단절) 상태 코드만으로 만든다 — 그 경우에도 조용히 성공으로 넘기지 않는다.
+ *
+ * 메시지를 여기 한 곳에서 만드는 이유: 모든 화면이 `error.message` 를 그대로 토스트에 띄우므로, 403 을
+ * 화면마다 분기하지 않고 이 자리에서 한 번 바꾸면 전부 같은 안내를 받는다.
  */
 function toRequestError(label: string, status: number, text: string): ApiRequestError {
   let error: ApiError | undefined
@@ -57,9 +113,14 @@ function toRequestError(label: string, status: number, text: string): ApiRequest
   } catch {
     // 봉투가 아니면 상태 코드만으로 만든다.
   }
-  const message = error?.message ?? `${label} → ${status}`
   const suffix = error ? ` (${error.code}, traceId=${error.traceId})` : ''
-  return new ApiRequestError(`${message}${suffix}`, status, error)
+  const requestError = new ApiRequestError(
+    `${error?.message ?? `${label} → ${status}`}${suffix}`,
+    status,
+    error
+  )
+  if (!requestError.isForbidden) return requestError
+  return new ApiRequestError(`${FORBIDDEN_MESSAGE}${suffix}`, status, error)
 }
 
 /**
@@ -73,15 +134,21 @@ function toRequestError(label: string, status: number, text: string): ApiRequest
  * 찾을 수 있어야 한다(조용한 실패 금지).
  */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? 'GET'
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    // CSRF 헤더는 호출부가 넘긴 헤더 뒤에 병합한다 — 호출부가 실수로 덮어쓰지 못하게.
+    headers: { 'Content-Type': 'application/json', ...init?.headers, ...csrfHeaders(method) },
   })
   const text = await res.text()
 
-  const label = `${init?.method ?? 'GET'} /api${path}`
+  const label = `${method} /api${path}`
   if (!res.ok) {
-    throw toRequestError(label, res.status, text)
+    const error = toRequestError(label, res.status, text)
+    if (error.isUnauthenticated) {
+      window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
+    }
+    throw error
   }
 
   // 2xx 인데 본문이 JSON 이 아닐 수 있다(프록시가 200 + HTML 에러 페이지를 돌려주는 경우).
@@ -221,6 +288,7 @@ export async function streamQuery(
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream, application/json',
+      ...csrfHeaders('POST'),
     },
     body: JSON.stringify({ question }),
     signal,
@@ -230,7 +298,11 @@ export async function streamQuery(
     // 백엔드 QueryController 가 스트림을 열기 전에 requireChat() 게이트로 던지기 때문이다.
     // 전에는 본문을 읽지 않고 상태 코드만 던져서, 사용자가 "설정하러 가야 한다"는 메시지도
     // traceId 도 보지 못했다(조용한 실패에 가까웠다).
-    throw toRequestError('POST /api/query', res.status, await res.text().catch(() => ''))
+    const error = toRequestError('POST /api/query', res.status, await res.text().catch(() => ''))
+    if (error.isUnauthenticated) {
+      window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT))
+    }
+    throw error
   }
   if (!res.body) {
     throw new ApiRequestError('POST /api/query → 응답 본문이 없습니다', res.status)
@@ -255,4 +327,19 @@ export async function streamQuery(
       }
     }
   }
+}
+
+/**
+ * GET /api/me — 세션 확인 + 로그인 사용자 정보.
+ *
+ * 앱이 부팅 직후 한 번 부른다. 두 가지를 겸한다: (1) 세션이 살아 있는지, (2) CSRF 토큰 쿠키 발급
+ * (백엔드가 이 요청에서 토큰을 건드려 쿠키를 내려보낸다 — 그게 없으면 첫 상태변경 POST 가 403 이 된다).
+ */
+export function getMe(signal?: AbortSignal): Promise<MeResponse> {
+  return request<MeResponse>('/me', { signal })
+}
+
+/** POST /api/auth/logout — 세션 무효화. 성공하면 화면은 로그인으로 돌아간다. */
+export function logout(): Promise<void> {
+  return request<void>('/auth/logout', { method: 'POST' })
 }
