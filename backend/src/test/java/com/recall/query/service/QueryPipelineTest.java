@@ -125,17 +125,36 @@ class QueryPipelineTest {
     }
 
     @Test
-    @DisplayName("retrieve: 분류 유형에 결과가 있으면 다른 유형을 재검색하지 않는다(빠른 경로 유지)")
-    void retrieveDoesNotFallBackWhenPrimaryHasResults() {
+    @DisplayName("retrieve: 분류 유형에 결과가 있어도 다른 유형을 함께 검색해 유형 우선으로 병합한다(오분류 시 근거 누락 방지)")
+    void retrieveMergesAllTypesPrimaryFirst() {
         HybridSearchService search = mock(HybridSearchService.class);
         UserAiContext ctx = ctxWithLlm((s, u) -> "");
         when(search.search("q", MemoryType.KNOWLEDGE, ctx)).thenReturn(List.of(mem(1)));
+        when(search.search("q", MemoryType.TROUBLESHOOTING, ctx)).thenReturn(List.of(mem(2)));
 
         QueryPipeline p = new QueryPipeline(search, cardCodec(), BOTH_TYPES);
         List<StoredMemory> out = p.retrieve("q", MemoryType.KNOWLEDGE, ctx);
 
-        assertEquals(List.of(1L), ids(out));
-        verify(search, org.mockito.Mockito.never()).search("q", MemoryType.TROUBLESHOOTING, ctx);
+        assertEquals(List.of(1L, 2L), ids(out), "분류 유형(KNOWLEDGE)이 먼저, 다른 유형 근거도 병합");
+        verify(search).search("q", MemoryType.TROUBLESHOOTING, ctx);
+    }
+
+    @Test
+    @DisplayName("retrieve: 오분류 유형이 결과를 쏟아내도 올바른 유형의 상위 근거가 병합 상위에 살아남는다(랭크별 라운드로빈)")
+    void retrieveInterleavesSoFloodDoesNotBuryOtherType() {
+        HybridSearchService search = mock(HybridSearchService.class);
+        UserAiContext ctx = ctxWithLlm((s, u) -> "");
+        // 오분류된 KNOWLEDGE 가 결과 3건을 쏟아내고, 올바른 TROUBLESHOOTING 은 1건.
+        when(search.search("q", MemoryType.KNOWLEDGE, ctx))
+                .thenReturn(List.of(mem(1), mem(3), mem(5)));
+        when(search.search("q", MemoryType.TROUBLESHOOTING, ctx)).thenReturn(List.of(mem(2)));
+
+        QueryPipeline p = new QueryPipeline(search, cardCodec(), BOTH_TYPES);
+        List<StoredMemory> out = p.retrieve("q", MemoryType.KNOWLEDGE, ctx);
+
+        // 라운드로빈: K0(1) T0(2) K1(3) K2(5) — TROUBLESHOOTING 근거(2)가 2번째로 올라온다.
+        // 단순 이어붙이기였다면 [1,3,5,2] 로 뒤로 밀려 RR 후보 창(RR_INPUT_MAX) 밖으로 나갈 수 있다.
+        assertEquals(List.of(1L, 2L, 3L, 5L), ids(out));
     }
 
     @Test

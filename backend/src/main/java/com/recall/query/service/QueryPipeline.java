@@ -118,30 +118,60 @@ public class QueryPipeline {
     }
 
     /**
-     * 하이브리드 검색(R·W) → 근거 후보(주어진 유형으로). 소유자·임베딩 채널 가용성은 {@code ctx}로 관통한다(요청 입력 userId 신뢰 금지). 트랜잭션은
-     * 검색 쿼리에만 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된 memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
+     * 하이브리드 검색(R·W) → 근거 후보. 소유자·임베딩 채널 가용성은 {@code ctx}로 관통한다(요청 입력 userId 신뢰 금지). 트랜잭션은 검색 쿼리에만
+     * 걸고(느린 LLM 호출은 트랜잭션 밖), 이후 리랭크·답변은 로드된 memory(structured 컬럼)만 사용해 커넥션을 오래 점유하지 않는다.
+     *
+     * <p>검색은 유형을 <b>배타 필터</b>({@code WHERE type=?})로 쓴다. 그래서 분류 유형 하나만 믿으면, C 분류가 틀렸을 때 — 특히 오분류된
+     * 유형에도 결과가 <b>조금</b> 있을 때 — 그 유형만 보고 다른 파티션의 더 맞는 근거를 통째로 놓친다(근거 누락 → "기록 없음" 오판, 불변 원칙 5). 이전
+     * 판(빈 결과일 때만 다른 유형 재검색)은 <b>오분류 유형이 비어 있을 때만</b> 보정돼, 결과가 있는 오분류는 그대로 통과했다.
+     *
+     * <p>그래서 등록된 <b>전 유형</b>을 각각 검색해 결정론으로 병합하고, 관련도 판정은 RR(LLM 리랭커)에 맡긴다 — 어느 유형이 맞는지는 관련도가 본질이라
+     * 결정론 단계가 아니라 RR 의 몫이다(불변 원칙 4: R·병합은 결정론, 판정만 LLM). 병합은 <b>유형 우선 라운드로빈</b>: 분류 유형을 맨 앞에 두고 각
+     * 유형의 랭크별 후보를 번갈아 담아, 한 유형이 결과를 쏟아내도 다른 유형의 상위 근거가 RR 후보 창({@link #RR_INPUT_MAX})에서 밀려나지 않게 한다
+     * (단순 이어붙이기는 앞 유형이 창을 다 채우면 뒤 유형이 리랭커에 닿지 못한다).
      */
     @Transactional(readOnly = true)
     public List<StoredMemory> retrieve(String question, MemoryType type, UserAiContext ctx) {
-        List<StoredMemory> primary = readable(searchService.search(question, type, ctx));
-        if (!primary.isEmpty()) {
-            return primary;
+        List<List<StoredMemory>> perType =
+                typesPrimaryFirst(type).stream()
+                        .map(t -> readable(searchService.search(question, t, ctx)))
+                        .toList();
+        return interleaveByRank(perType);
+    }
+
+    /**
+     * 병합 순서원 — 분류 유형을 맨 앞에 둔 등록 유형 목록(그 외는 {@code registered()} 순서). {@code registered()} 는 EnumMap
+     * 이라 순회 순서가 결정적이다(불변 원칙 4: 같은 입력=같은 순서).
+     */
+    private List<MemoryType> typesPrimaryFirst(MemoryType type) {
+        List<MemoryType> ordered = new ArrayList<>();
+        if (answers.registered().contains(type)) {
+            ordered.add(type);
         }
-        // 검색은 유형을 배타 필터(WHERE type=?)로 쓴다. 그래서 C 분류가 틀리거나 실패해 기본 유형으로
-        // 격하되면, 다른 유형 파티션에 근거가 있어도 빈 결과 → "기록 없음"이 된다(기억이 있는데 없다고
-        // 답함, 불변 원칙 5 위반). 빈 결과일 때만 나머지 등록 유형을 재검색해, 전 유형에서 근거가 없을 때만
-        // 빈 결과를 확정한다. registered() 는 EnumMap 이라 순회 순서가 결정적이다(불변 원칙 4: R 은 결정론).
         for (MemoryType other : answers.registered()) {
-            if (other == type) {
-                continue;
-            }
-            List<StoredMemory> alt = readable(searchService.search(question, other, ctx));
-            if (!alt.isEmpty()) {
-                log.info("유형 {} 검색 결과 없음 → {} 재검색에서 근거 확보(C 분류 보정)", type, other);
-                return alt;
+            if (other != type) {
+                ordered.add(other);
             }
         }
-        return primary; // 전 유형에서 없음 → 진짜 기록 없음
+        return ordered;
+    }
+
+    /**
+     * 여러 유형의 순위 목록을 <b>랭크별 라운드로빈</b>으로 병합한다(각 목록의 0번째들 → 1번째들 → …). 앞 목록(분류 유형)이 동일 랭크에서 먼저 담긴다. id
+     * 중복은 첫 등장만 남긴다 — 유형 배타필터라 실제로 겹치지 않지만, 겹쳐 들어와도 안전하게. 전 유형에서 비면 빈 결과(진짜 기록 없음)다.
+     */
+    private static List<StoredMemory> interleaveByRank(List<List<StoredMemory>> perType) {
+        List<StoredMemory> merged = new ArrayList<>();
+        Set<Long> seen = new HashSet<>();
+        int deepest = perType.stream().mapToInt(List::size).max().orElse(0);
+        for (int rank = 0; rank < deepest; rank++) {
+            for (List<StoredMemory> list : perType) {
+                if (rank < list.size() && seen.add(list.get(rank).id())) {
+                    merged.add(list.get(rank));
+                }
+            }
+        }
+        return merged;
     }
 
     /**
