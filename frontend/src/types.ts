@@ -104,8 +104,15 @@ export interface Review {
   targetMemoryId: string | null
   /** 판정 근거(LLM 이 남긴 설명). 없으면 빈 문자열. */
   judgeReason: string
+  /** 검토 항목 상태. 반려는 삭제가 아니라 이 값의 전이다(불변 원칙 3). */
+  status: ReviewStatus
+  /** 승인·반려한 시각(YYYY-MM-DD). 아직 대기 중이면 빈 문자열. */
+  resolved: string
   cards: ReviewCard[]
 }
+
+/** 검토 항목 상태. `UNKNOWN` 의 취지는 {@link Judgement} 와 같다 — 모르는 값을 대기로 접지 않는다. */
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'UNKNOWN'
 
 /** 물어보기 범위 필터. */
 export type QueryScope = '전체' | 'ts' | 'kn'

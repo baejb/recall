@@ -64,6 +64,23 @@ public class ReviewService {
                 .toList();
     }
 
+    /**
+     * 처리된(승인·반려) 검토 항목을 최근 처리순으로.
+     *
+     * <p>반려는 삭제가 아니라 상태 전이이고 원문({@code capture})도 남는데(불변 원칙 3), 조회 경로가 {@code pending} 하나뿐이라 반려한
+     * 항목은 화면에서 닿을 방법이 없었다 — 잘못 반려하면 확인조차 못 하고 같은 원문을 또 붙여넣게 된다. 기억 쪽이 {@code archived}·{@code
+     * incorrect} 를 상태 탭으로 보여주는 것과 같은 자리를 검토 쪽에도 연다.
+     */
+    @Transactional(readOnly = true)
+    public List<ReviewItemResponse> listProcessed() {
+        return reviewRepository
+                .findByUserIdAndStatusInOrderByResolvedAtDesc(
+                        currentUser.currentUserId(), ReviewStatus.RESOLVED)
+                .stream()
+                .map(ReviewService::toResponse)
+                .toList();
+    }
+
     /** 승인 대기 건수. */
     @Transactional(readOnly = true)
     public long countPending() {
@@ -164,6 +181,7 @@ public class ReviewService {
                 item.getType() == null ? null : item.getType().name(),
                 item.getStatus(),
                 item.getProposed(),
-                item.getCreatedAt());
+                item.getCreatedAt(),
+                item.getResolvedAt());
     }
 }
