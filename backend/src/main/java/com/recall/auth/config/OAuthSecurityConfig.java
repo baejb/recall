@@ -13,7 +13,9 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 
 /**
  * OAuth 모드의 필터 체인 — Google 로그인 + 세션 + CSRF. {@code auth} 모듈이 자기 배선을 소유한다({@code
@@ -70,7 +72,19 @@ public class OAuthSecurityConfig {
         PathPatternRequestMatcher apiPaths =
                 PathPatternRequestMatcher.withDefaults().matcher(API_PATHS);
 
-        http.csrf(
+        // 401 로 끝난 API 요청을 "로그인 후 갈 곳"으로 저장하지 않는다. SPA 는 부팅 직후 세션 없이
+        // /api/me·/api/reviews 를 부르고, 기본 RequestCache 는 그 401 을 사용자가 가려던 목적지로
+        // 본다(fetch 가 Accept 를 붙이지 않아 와일드카드로 나가서 JSON·XHR 제외 규칙에 걸리지 않는다).
+        // 그러면 로그인 성공 후 defaultSuccessUrl 이 그 저장분을 우선해 화면 대신 API 응답으로 간다.
+        // dev 에서는 vite 가 /api 를 changeOrigin:true 로 프록시해 Host 가 :8080 이므로 저장된 절대
+        // URL 이 백엔드 오리진이 되고, 로그인하면 SPA 가 없는 :8080 으로 튕겨 404 를 본다.
+        // 진짜 화면 이동(공유 링크 /memories/42)은 API 경로가 아니라 그대로 저장된다 — alwaysUse=false 의
+        // 의도가 살아 있다.
+        HttpSessionRequestCache requestCache = new HttpSessionRequestCache();
+        requestCache.setRequestMatcher(new NegatedRequestMatcher(apiPaths));
+
+        http.requestCache(cache -> cache.requestCache(requestCache))
+                .csrf(
                         csrf ->
                                 csrf.csrfTokenRepository(
                                                 CookieCsrfTokenRepository.withHttpOnlyFalse())

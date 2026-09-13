@@ -1,13 +1,19 @@
 package com.recall.auth.config;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.recall.auth.AppUserPrincipal;
 import com.recall.common.exception.ErrorCode;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -15,6 +21,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -85,6 +103,106 @@ class OAuthSecurityChainTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value(ErrorCode.FORBIDDEN.name()));
+    }
+
+    /**
+     * 🔴 401 로 끝난 API 요청을 <b>로그인 후 목적지로 저장하지 않는다</b>.
+     *
+     * <p>SPA 는 부팅 직후 세션이 없는 상태로 {@code /api/me}·{@code /api/reviews} 를 부른다. 그 요청들은 401 이고, 스프링의 기본
+     * {@code RequestCache} 는 그것을 "사용자가 가려던 곳"으로 보고 세션에 저장한다({@code fetch} 가 {@code Accept} 를 붙이지 않아
+     * 와일드카드로 나가므로 기본 제외 규칙 — JSON·XHR — 에 걸리지 않는다). 그러면 로그인 성공 후 {@code defaultSuccessUrl("/",
+     * false)} 가 그 저장된 요청을 우선해서, 사용자는 화면 대신 <b>API 응답</b>에 떨어진다.
+     *
+     * <p>dev 에서는 증상이 더 나쁘다 — vite 가 {@code /api} 를 {@code changeOrigin: true} 로 프록시해 Host 가 {@code
+     * :8080} 으로 바뀌므로, 저장된 절대 URL 이 백엔드 오리진이 된다. 로그인하면 SPA 가 없는 {@code :8080} 으로 튕겨 404 를 본다.
+     *
+     * <p>그래서 API 경로는 애초에 저장 대상에서 뺀다. 진짜 화면 이동(공유 링크 {@code /memories/42})은 그대로 저장돼 {@code
+     * alwaysUse=false} 의 의도가 살아 있다.
+     */
+    @Test
+    @DisplayName("🔴 401 로 끝난 API 요청은 로그인 후 목적지로 저장되지 않는다 — 로그인하면 화면이 아니라 API 응답에 떨어진다")
+    void unauthenticatedApiRequestIsNotSavedAsPostLoginDestination() throws Exception {
+        // SPA 의 fetch 를 그대로 흉내낸다 — Accept 를 붙이지 않으므로 */* 로 나간다.
+        HttpSession session =
+                mockMvc.perform(get("/api/me"))
+                        .andExpect(status().isUnauthorized())
+                        .andReturn()
+                        .getRequest()
+                        .getSession(false);
+
+        // 세션이 아예 안 생겼다면 저장된 목적지도 없다(그게 이상적이다). 생겼다면 그 안이 비어 있어야 한다.
+        SavedRequest saved = null;
+        if (session != null) {
+            MockHttpServletRequest probe = new MockHttpServletRequest();
+            probe.setSession((MockHttpSession) session);
+            saved = new HttpSessionRequestCache().getRequest(probe, new MockHttpServletResponse());
+        }
+
+        assertNull(saved, "401 로 끝난 API 요청이 로그인 후 목적지로 저장됐다 — 로그인하면 화면 대신 그 API 응답으로 간다");
+    }
+
+    /**
+     * 로그인한 세션을 흉내낸다 — 실제 Google 왕복 없이 체인 뒤쪽(인가·CSRF·컨트롤러)을 검증하기 위해.
+     *
+     * <p>이메일은 이 클래스가 띄운 컨텍스트의 허용목록(`owner@example.com`)과 같아야 한다. 다르면 {@code
+     * AllowedEmailsRecheckFilter} 가 먼저 세션을 끊어, 로그아웃이 아니라 재검사가 통과시킨 결과를 보게 된다.
+     */
+    private static MockHttpSession authenticatedSession() {
+        OidcIdToken idToken =
+                OidcIdToken.withTokenValue("token")
+                        .claim(StandardClaimNames.SUB, "sub-logout")
+                        .claim(StandardClaimNames.EMAIL, "owner@example.com")
+                        .build();
+        AppUserPrincipal principal =
+                new AppUserPrincipal(
+                        AuthorityUtils.createAuthorityList("ROLE_USER"),
+                        idToken,
+                        null,
+                        StandardClaimNames.SUB,
+                        2L);
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        principal, null, principal.getAuthorities()));
+
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        return session;
+    }
+
+    /**
+     * 🔴 로그아웃이 <b>세션을 실제로 무효화</b>하는지 고정한다.
+     *
+     * <p>이 경로에는 테스트가 없었다. {@code AuthController.logout} 은 {@code session.invalidate()} 한 줄이고,
+     * Spring Security 의 기본 로그아웃은 {@code logout.disable()} 로 꺼져 있다 — 즉 이 한 줄이 지워지거나 {@code
+     * getSession(false)} 가 {@code null} 을 받는 형태로 바뀌면, <b>화면은 로그아웃된 것처럼 보이는데 세션은 살아 있다</b>. 프론트가 응답과
+     * 무관하게 익명으로 되돌리기 때문에({@code useSession} 의 {@code finally}) 증상이 드러나지 않는다.
+     */
+    @Test
+    @DisplayName("🔴 로그아웃은 세션을 무효화한다 — 화면만 익명이 되고 세션이 남으면 그 쿠키는 계속 통한다")
+    void logoutInvalidatesSession() throws Exception {
+        MockHttpSession session = authenticatedSession();
+
+        // CSRF 토큰을 먼저 받는다 — 상태변경 POST 라 없으면 403 이다(로그아웃이 막히는 실제 경로).
+        Cookie csrf =
+                mockMvc.perform(get("/api/health").session(session))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getCookie("XSRF-TOKEN");
+        assertNotNull(csrf, "XSRF-TOKEN 쿠키가 없다 — 로그아웃 POST 가 403 이 된다");
+        assertFalse(session.isInvalid(), "로그아웃 전에 세션이 이미 죽어 있다 — 이 테스트의 전제가 깨졌다");
+
+        mockMvc.perform(
+                        post("/api/auth/logout")
+                                .session(session)
+                                .cookie(csrf)
+                                .header("X-XSRF-TOKEN", csrf.getValue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        assertTrue(session.isInvalid(), "로그아웃했는데 세션이 살아 있다 — 그 쿠키를 가진 브라우저는 계속 통한다");
     }
 
     @Test
