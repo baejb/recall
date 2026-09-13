@@ -5,8 +5,11 @@ import { getMemoryDetail, streamQuery } from '../api/client'
 
 /**
  * 물어보기 결과 — POST /api/query 를 SSE로 스트리밍 소비한다.
- * 답변은 저장된 근거(memoryId)에 매인다. 조각이 하나도 없으면 "기록 없음"으로 표시(근거 없는 생성 금지).
+ * 답변은 저장된 근거(memoryId)에 매인다. 근거가 없으면 "기록 없음"으로 표시(근거 없는 생성 금지).
  */
+// 백엔드 AnswerStreamer.NO_RECORD_TEXT 와 같은 센티넬 — 근거 없음이면 이 텍스트가 답변 조각으로 온다
+// (빈 조각이 아니라). 프론트도 이 값을 빈-상태로 인식해야 "찾은 답"처럼 오표시하지 않는다.
+const NO_RECORD_TEXT = '기록 없음'
 export function QueryResult({ question, onBack }: { question: string; onBack: () => void }) {
   const navigate = useNavigate()
   const [fragments, setFragments] = useState<AnswerFragment[]>([])
@@ -42,8 +45,12 @@ export function QueryResult({ question, onBack }: { question: string; onBack: ()
   }, [fragments])
 
   // 근거 제목을 id별로 조회(이미 요청한 id는 ref로 건너뛰어 중복 요청 방지). 실패해도 폴백 라벨로 노출.
+  // SSE로 근거가 증분 도착해 citedIds가 커질 때마다 이 이펙트가 재실행되는데, 여기서 in-flight 요청을
+  // 취소하면 먼저 인용된 근거의 제목 조회가 취소돼 폴백("기억 #n")에 영구 고정된다(requestedRef에 이미
+  // 등록돼 재요청도 안 됨). 그래서 citedIds 변경 시엔 취소하지 않고, 언마운트 시에만 모두 취소한다.
+  const detailCtrlRef = useRef<AbortController | null>(null)
   useEffect(() => {
-    const ctrl = new AbortController()
+    const ctrl = (detailCtrlRef.current ??= new AbortController())
     for (const id of citedIds) {
       if (requestedRef.current.has(id)) continue
       requestedRef.current.add(id)
@@ -54,12 +61,17 @@ export function QueryResult({ question, onBack }: { question: string; onBack: ()
           setTitles((prev) => ({ ...prev, [id]: `기억 #${id}` }))
         })
     }
-    return () => ctrl.abort()
   }, [citedIds])
+
+  // 언마운트에서만 진행 중인 제목 조회를 정리(재질문 시 QueryResult가 key로 재마운트된다).
+  useEffect(() => () => detailCtrlRef.current?.abort(), [])
 
   const citations = citedIds.map((id) => ({ id, title: titles[id] ?? `기억 #${id}` }))
 
-  const isEmpty = done && !error && answer.trim().length === 0
+  // 근거 없음: 조각이 0개이거나, 백엔드가 보낸 "기록 없음" 센티넬(끝의 마침표·공백 무시, 백엔드 규칙과 동일).
+  const normalizedAnswer = answer.trim().replace(/[.\s]+$/, '')
+  const isEmpty =
+    done && !error && (normalizedAnswer.length === 0 || normalizedAnswer === NO_RECORD_TEXT)
 
   return (
     <section className="screen">

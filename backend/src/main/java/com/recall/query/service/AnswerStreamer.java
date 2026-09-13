@@ -5,9 +5,9 @@ import com.recall.llm.UserAiContext;
 import com.recall.memory.StoredMemory;
 import com.recall.query.controller.dto.AnswerFragment;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +47,23 @@ public class AnswerStreamer {
         // ctx(소유자·chat/embedding 클라이언트)는 요청 스레드에서 이미 해석해 넘겨받는다 — SSE 가상 스레드에는
         // SecurityContext(thread-local)가 전파되지 않으므로 여기서 다시 풀지 않는다(교차유출 방지). 클로저로
         // 캡처해 요청 사용자가 바뀌어도 이 스트림은 캡처 시점의 컨텍스트로만 동작한다.
-        Thread.ofVirtual().name("sse-answer-").start(() -> emit(emitter, question, ctx));
+        Thread worker =
+                Thread.ofVirtual()
+                        .name("sse-answer-")
+                        .unstarted(() -> emit(emitter, question, ctx));
+        // 타임아웃/전송 에러로 SSE가 끝나면 시작한 가상 스레드를 취소한다 — 클라이언트가 사라졌는데도 LLM
+        // 스트림을 계속 소비하면 비용·스레드가 샌다. interrupt 는 emit 의 textSink 가 관측해 소비를 멈춘다.
+        emitter.onTimeout(() -> cancelOnTimeout(worker, emitter, ctx.userId()));
+        emitter.onError(e -> worker.interrupt());
+        worker.start();
         return emitter;
+    }
+
+    /** SSE 타임아웃 시 스트리밍 워커를 인터럽트하고 emitter를 종료한다. */
+    void cancelOnTimeout(Thread worker, SseEmitter emitter, long userId) {
+        log.warn("SSE 답변 타임아웃 — 작업 스레드 취소: user={}", userId);
+        worker.interrupt();
+        emitter.complete();
     }
 
     void emit(SseEmitter emitter, String question, UserAiContext ctx) {
@@ -63,8 +78,12 @@ public class AnswerStreamer {
                 // 둘을 구분할 수 없었으므로, 빈 결과에는 판단된 유형을 함께 남긴다(조용한 실패 금지).
                 // 질문 원문은 남기지 않는다 — 로그는 마스킹 경로를 거치지 않는다.
                 log.info("기록 없음 응답: user={} type={}", ctx.userId(), type);
+                // 조각 형태를 record 하나로 통일한다 — 이 이벤트만 Map 으로 보내면 나머지 조각과 와이어
+                // 키 집합이 달라진다(계약: Map 금지, 타입 있는 record). memoryId 는 없음(text 만).
                 emitter.send(
-                        SseEmitter.event().name(EVENT_NAME).data(Map.of("text", NO_RECORD_TEXT)));
+                        SseEmitter.event()
+                                .name(EVENT_NAME)
+                                .data(new AnswerFragment(NO_RECORD_TEXT, null)));
                 emitter.complete();
                 return;
             }
@@ -77,6 +96,11 @@ public class AnswerStreamer {
             StringBuilder answer = new StringBuilder();
             Consumer<String> textSink =
                     token -> {
+                        if (Thread.currentThread().isInterrupted()) {
+                            // 취소됨(타임아웃/클라이언트 끊김) — LLM 스트림 소비를 즉시 멈춘다.
+                            throw new UncheckedIOException(
+                                    new InterruptedIOException("SSE 답변 취소됨"));
+                        }
                         if (token == null || token.isEmpty()) {
                             return;
                         }
