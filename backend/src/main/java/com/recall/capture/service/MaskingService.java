@@ -37,8 +37,14 @@ public class MaskingService {
     /** 값을 이루는 문자. {@code ⟨⟩} 를 빼서 이미 마스킹된 값을 다시 건드리지 않는다(멱등). */
     private static final String VALUE_CHARS = "[^\\s\"'⟨⟩]";
 
-    /** 키와 값을 가르는 구분자. 값만 가리고 키 이름은 남기려고 따로 캡처한다. */
-    private static final String DELIMITER = "(\\s*[:=]\\s*\"?)";
+    /**
+     * 키와 값을 가르는 구분자. 값만 가리고 키 이름은 남기려고 따로 캡처한다.
+     *
+     * <p><b>여는 따옴표가 {@code ["']?} 인 이유</b> — 큰따옴표만 소비하면 {@code password='hunter2'} 처럼 작은따옴표로 감싼
+     * 값(YAML·Python/Ruby dict)에서 규칙 <b>전체가 매칭에 실패</b>한다: 구분자가 {@code =} 까지만 먹고, 값 자리의 첫 글자가 {@code
+     * '} 인데 {@link #VALUE_CHARS} 가 따옴표를 제외하기 때문이다. 그러면 가려지는 게 아니라 <b>그대로 나간다</b>(🔴 유출).
+     */
+    private static final String DELIMITER = "(\\s*[:=]\\s*[\"']?)";
 
     /**
      * 모호한 키의 값을 "시크릿 모양"으로 인정하는 최소 길이.
