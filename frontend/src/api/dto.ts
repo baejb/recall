@@ -35,9 +35,11 @@ export interface ReviewItemResponse {
   targetMemoryId: number | null
   judgeReason: string | null
   memoryType: string | null
-  status: string // pending | approved | edited | rejected
+  status: string // pending | approved | rejected
   proposed: string // KnowledgeCard JSON 문자열
   createdAt: string
+  /** 승인·반려한 시각. 아직 대기 중이면 null. */
+  resolvedAt: string | null
 }
 
 /** POST /api/captures 요청/응답 */

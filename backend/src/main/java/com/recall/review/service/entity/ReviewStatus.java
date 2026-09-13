@@ -1,5 +1,7 @@
 package com.recall.review.service.entity;
 
+import java.util.List;
+
 /**
  * 검토 항목 상태({@code review_queue.status}) 어휘 — 이 컬럼을 소유한 review 도메인이 어휘도 소유한다.
  *
@@ -19,6 +21,14 @@ public final class ReviewStatus {
 
     /** 반려됨 — memory 를 만들지 않고 항목만 닫는다(삭제 아님, 상태 보존). */
     public static final String REJECTED = "rejected";
+
+    /**
+     * 이미 처리돼 대기함을 떠난 상태들 — 처리 기록 조회의 대상.
+     *
+     * <p>호출부마다 {@code List.of(APPROVED, REJECTED)} 를 적지 않고 여기서 한 번에 묶는 이유: 상태가 늘면 그것이 대기 쪽인지 처리 쪽인지
+     * 정하는 자리가 하나여야 한다. 흩어져 있으면 새 상태가 어느 목록에도 안 들어가 <b>어느 화면에서도 조회되지 않는 항목</b>이 조용히 생긴다.
+     */
+    public static final List<String> RESOLVED = List.of(APPROVED, REJECTED);
 
     private ReviewStatus() {}
 }

@@ -217,6 +217,16 @@ export function getReviews(signal?: AbortSignal): Promise<ReviewItemResponse[]> 
   return request<ReviewItemResponse[]>('/reviews', { signal })
 }
 
+/**
+ * GET /api/reviews?view=processed — 이미 승인·반려한 항목을 최근 처리순으로.
+ *
+ * 대기 목록과 함수를 나눈 이유: 호출 시점이 다르다(대기함은 앱 부팅 시, 처리 기록은 탭을 열 때). 한 함수에
+ * 인자를 받게 하면 기존 호출부가 전부 인자를 의식해야 하고, 기본값을 잘못 넘기면 조용히 다른 목록이 온다.
+ */
+export function getProcessedReviews(signal?: AbortSignal): Promise<ReviewItemResponse[]> {
+  return request<ReviewItemResponse[]>('/reviews?view=processed', { signal })
+}
+
 export function getReviewCount(signal?: AbortSignal): Promise<ReviewCountResponse> {
   return request<ReviewCountResponse>('/reviews/count', { signal })
 }

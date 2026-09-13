@@ -11,6 +11,7 @@ import type {
   MemoryTypeKey,
   Review,
   ReviewCard,
+  ReviewStatus,
   TsAttempt,
   TsFields,
   TsStatus,
@@ -192,6 +193,20 @@ export function toReview(r: ReviewItemResponse): Review {
     judgement: toJudgement(r.judgement),
     targetMemoryId: r.targetMemoryId == null ? null : String(r.targetMemoryId),
     judgeReason: r.judgeReason ?? '',
+    status: toReviewStatus(r.status),
+    resolved: r.resolvedAt ? toDate(r.resolvedAt) : '',
     cards: [reviewCard],
+  }
+}
+
+/** 백엔드 상태 문자열 → 화면 모델. 모르는 값을 `pending` 으로 접지 않는다({@link toJudgement} 와 같은 이유). */
+export function toReviewStatus(raw: string | null | undefined): ReviewStatus {
+  switch (raw) {
+    case 'pending':
+    case 'approved':
+    case 'rejected':
+      return raw
+    default:
+      return 'UNKNOWN'
   }
 }
