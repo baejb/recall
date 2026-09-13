@@ -4,6 +4,7 @@ import com.recall.capture.service.entity.Capture;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,9 +17,12 @@ public interface CaptureRepository extends JpaRepository<Capture, Long> {
     /** 이 사용자가 소유한 capture 건수(부팅 안내용 — 상태와 무관하게 전부 센다). */
     long countByUserId(long userId);
 
-    /** 처리 중/실패한(아직 검토 대기함에 오르지 않은) 캡처를 최신순으로 — 상태 노출 엔드포인트용(사용자 스코프). */
+    /**
+     * 처리 중/실패한(아직 검토 대기함에 오르지 않은) 캡처를 최신순으로 — 상태 노출 엔드포인트용(사용자 스코프). {@code limit} 으로 상한을 둬 오래된
+     * FAILED 가 누적돼도 무제한 로드하지 않는다(호출부가 절단을 드러낸다).
+     */
     List<Capture> findByUserIdAndStatusInOrderByCreatedAtDesc(
-            long userId, Collection<String> statuses);
+            long userId, Collection<String> statuses, Limit limit);
 
     /** 원본 캡처 조회를 소유자 스코프로 — 남의 capture id 를 넘겨도 조회되지 않는다(교차유출 금지). */
     Optional<Capture> findByIdAndUserId(Long id, long userId);

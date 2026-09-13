@@ -75,7 +75,7 @@ public class HybridSearchService {
                         SearchChannel.MEMORY_BM25, bm25Ids);
         Map<SearchChannel, Double> weights = plans.get(type).channelWeights();
         List<Long> fused = RrfFusion.fuse(ranked, weights);
-        return loadInOrder(fused);
+        return loadInOrder(userId, fused);
     }
 
     /**
@@ -104,7 +104,7 @@ public class HybridSearchService {
      * <p>순서 유지는 memory 모듈의 계약({@code byIdsInOrder})이 보장한다 — 전에는 이 서비스가 남의 리포지토리를 직접 잡고 {@code
      * findAllById} 의 순서 미보장을 여기서 손으로 되돌렸다. 그 보정은 조회를 소유한 쪽에 있어야, 다른 호출자가 같은 함정을 다시 밟지 않는다.
      */
-    private List<StoredMemory> loadInOrder(List<Long> ids) {
-        return ids.isEmpty() ? List.of() : memories.byIdsInOrder(ids);
+    private List<StoredMemory> loadInOrder(long userId, List<Long> ids) {
+        return ids.isEmpty() ? List.of() : memories.byIdsInOrder(userId, ids);
     }
 }

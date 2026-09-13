@@ -4,6 +4,7 @@ import com.recall.common.type.MemoryType;
 import com.recall.memory.MemoryStatus;
 import com.recall.memory.service.entity.Memory;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +40,9 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
 
     /** 이 사용자가 소유한 memory 건수(부팅 안내용 — 상태와 무관하게 전부 센다). */
     long countByUserId(long userId);
+
+    /** id 목록을 소유자 스코프로 조회 — 남의 id 가 섞여 들어와도 그 행은 빠진다(교차유출 금지, 순서는 호출부가 복원). */
+    List<Memory> findByIdInAndUserId(Collection<Long> ids, long userId);
 
     /**
      * 활성 기억 한 페이지(키셋). 정렬 {@code created_at DESC, id DESC}.

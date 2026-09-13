@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.recall.common.config.CurrentUserProvider;
+import com.recall.common.exception.SecretKeyUnavailableException;
 import com.recall.common.exception.ValidationException;
 import com.recall.common.secret.SecretCipher;
 import com.recall.llm.EmbeddingClientFactory;
@@ -25,6 +26,7 @@ import java.util.List;
 import javax.crypto.KeyGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 
 class SettingsServiceTest {
 
@@ -104,12 +106,15 @@ class SettingsServiceTest {
                         realCatalog(),
                         mock(ApplicationEventPublisher.class),
                         BOOTSTRAP_USER);
-        assertThrows(
-                IllegalStateException.class,
-                () ->
-                        svc.update(
-                                new SettingsUpdate(
-                                        null, null, "sk-x", null, null, null, null, null)));
+        // fail-closed 는 서버 미구성(마스터키 없음)이라 500 catch-all 이 아니라 503 전용 코드로 나가야 한다.
+        SecretKeyUnavailableException ex =
+                assertThrows(
+                        SecretKeyUnavailableException.class,
+                        () ->
+                                svc.update(
+                                        new SettingsUpdate(
+                                                null, null, "sk-x", null, null, null, null, null)));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, ex.status());
     }
 
     @Test

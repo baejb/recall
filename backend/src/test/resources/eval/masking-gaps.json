@@ -7,9 +7,9 @@
   },
   {
     "id": "gap-connection-string-password",
-    "input": "jdbc:postgresql://recall:hunter2prod@db.internal:5432/recall 로 붙었다",
+    "input": "jdbc:postgresql://recall:hunter2prod@localhost:5432/recall 로 붙었다",
     "secrets": ["hunter2prod"],
-    "why": "URL 인증정보는 KEY=VALUE 모양이 아니다(구분자가 : 와 @). URL 파싱 규칙이 따로 필요하다."
+    "why": "URL 인증정보는 KEY=VALUE 모양이 아니다(구분자가 : 와 @). URL 파싱 규칙이 따로 필요하다. 호스트에 점이 있으면(db.internal) 이메일 규칙이 user:pass@host 를 통째로 삼켜 값이 우연히 지워지지만, 그건 커버가 아니라 오분류다 — 검토 화면이 DB 비밀번호를 ⟨email⟩ 로 알려준다. 점 없는 호스트(localhost)면 그 우연도 사라진다."
   },
   {
     "id": "gap-webhook-url",

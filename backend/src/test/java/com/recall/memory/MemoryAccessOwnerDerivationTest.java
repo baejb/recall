@@ -10,6 +10,7 @@ import com.recall.capture.CaptureAccess;
 import com.recall.common.type.MemoryType;
 import com.recall.memory.repository.MemoryRepository;
 import com.recall.memory.service.entity.Memory;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -54,5 +55,29 @@ class MemoryAccessOwnerDerivationTest {
         verify(repository).save(saved.capture());
         assertEquals(CAPTURE_OWNER, saved.getValue().getUserId());
         assertEquals(CAPTURE_ID, saved.getValue().getCaptureId());
+    }
+
+    @Test
+    @DisplayName("byIdsInOrder 는 소유자 스코프로 조회하고(교차유출 이중방어) 융합 순서를 유지한다")
+    void byIdsInOrderScopesToOwnerAndKeepsOrder() {
+        long userId = 42L;
+        Memory m1 = mock(Memory.class);
+        when(m1.getId()).thenReturn(1L);
+        when(m1.getType()).thenReturn(MemoryType.KNOWLEDGE);
+        when(m1.getStructured()).thenReturn("{}");
+        Memory m3 = mock(Memory.class);
+        when(m3.getId()).thenReturn(3L);
+        when(m3.getType()).thenReturn(MemoryType.KNOWLEDGE);
+        when(m3.getStructured()).thenReturn("{}");
+        // 스코프 조회는 요청 순서와 무관하게 돌려줄 수 있다. 2L 은 남의 것/삭제라 결과에서 빠진다.
+        when(repository.findByIdInAndUserId(List.of(3L, 2L, 1L), userId))
+                .thenReturn(List.of(m1, m3));
+
+        List<StoredMemory> result =
+                new MemoryAccess(repository, captures).byIdsInOrder(userId, List.of(3L, 2L, 1L));
+
+        // 무스코프 findAllById 가 아니라 소유자 스코프 쿼리를 썼는지 + 융합 순서(3,1) 유지 + 없는 2L 제외.
+        verify(repository).findByIdInAndUserId(List.of(3L, 2L, 1L), userId);
+        assertEquals(List.of(3L, 1L), result.stream().map(StoredMemory::id).toList());
     }
 }

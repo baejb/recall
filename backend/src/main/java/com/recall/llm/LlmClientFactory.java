@@ -10,7 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * LLM 설정 → 클라이언트. 등록된 {@link ChatProvider} 서술자만으로 디스패치한다(하드코딩 switch 없음). 가용 provider = 주입된 서술자
  * 목록이므로 카탈로그와 팩토리가 같은 원천을 공유해 드리프트가 구조적으로 불가능하다.
  *
- * <p>동일 설정(provider|model|baseUrl|key 해시)은 캐시 재사용.
+ * <p>동일 설정(provider|model|baseUrl|key 지문)은 캐시 재사용. 키 지문은 충돌 저항 SHA-256({@link ApiKeyFingerprint}) —
+ * 32비트 hashCode 는 충돌 시 다른 사용자의 키로 만든 클라이언트를 반환할 수 있다.
  */
 public class LlmClientFactory {
 
@@ -43,7 +44,7 @@ public class LlmClientFactory {
                         + "|"
                         + props.baseUrl()
                         + "|"
-                        + Integer.toHexString(props.apiKey().hashCode());
+                        + ApiKeyFingerprint.of(props.apiKey());
         return cache.computeIfAbsent(cacheKey, k -> provider.create(props));
     }
 }
