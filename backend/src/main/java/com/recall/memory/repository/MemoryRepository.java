@@ -38,6 +38,9 @@ public interface MemoryRepository extends JpaRepository<Memory, Long> {
     /** 상세/상태전이를 소유자 스코프로 — 남의 memory id 를 넘겨도 조회되지 않는다(교차유출 금지). */
     Optional<Memory> findByIdAndUserId(Long id, long userId);
 
+    /** 이 사용자가 소유한 memory 건수(부팅 안내용 — 상태와 무관하게 전부 센다). */
+    long countByUserId(long userId);
+
     /** id 목록을 소유자 스코프로 조회 — 남의 id 가 섞여 들어와도 그 행은 빠진다(교차유출 금지, 순서는 호출부가 복원). */
     List<Memory> findByIdInAndUserId(Collection<Long> ids, long userId);
 

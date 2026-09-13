@@ -176,6 +176,19 @@ export interface CaptureRawResponse {
 }
 
 /**
+ * GET /api/me — 현재 로그인 사용자. 세션이 없으면 이 호출이 401 로 실패한다.
+ *
+ * `bootstrapMode=true` 는 백엔드가 인증 없이(부트스트랩 모드) 돌고 있다는 뜻이다 — 모든 요청이
+ * `app_user.id=1` 로 스코프된다. 화면이 그 사실을 숨기면 열려 있는 인스턴스가 정상처럼 보인다.
+ */
+export interface MeResponse {
+  userId: number
+  email: string
+  displayName: string
+  bootstrapMode: boolean
+}
+
+/**
  * 모든 REST 응답의 공통 봉투 — 성공은 `{success:true,data}`, 실패는 `{success:false,error}`.
  * 백엔드 `com.recall.common.web.ApiResponse` 를 미러링한다.
  *

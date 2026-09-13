@@ -256,6 +256,42 @@ img {
   font-size: 11px;
   color: var(--text-faint);
 }
+/* 이름·이메일이 길어도 로그아웃 버튼을 밀어내지 않게 줄인다. */
+.userchip .userinfo {
+  min-width: 0;
+  flex: 1;
+}
+.userchip .who,
+.userchip .mail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 부트스트랩 모드(인증 없음) 표시 — 경고색으로 눈에 걸리게 한다. */
+.userchip .av.warnav {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* 로그인·연결실패 화면: 사이드바 없이 중앙 정렬. */
+.loginwrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login {
+  max-width: 420px;
+}
+.loginbtn {
+  display: inline-block;
+  margin-top: 18px;
+  text-decoration: none;
+}
+.note.bad {
+  border-color: color-mix(in srgb, var(--bad) 40%, var(--border));
+  background: var(--bad-soft);
+}
 
 .stage {
   padding: 34px clamp(20px, 4vw, 52px) 90px;

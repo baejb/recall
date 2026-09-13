@@ -1,34 +1,43 @@
 package com.recall.common.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * 멀티유저 SSO 로그인 — 틀(stub)만 배선.
+ * <b>부트스트랩 모드</b>의 필터 체인 — 인증 없이 전 요청 허용, 모든 데이터가 {@code app_user.id=1} 소유.
  *
- * <p>oauth2-client 의존성이 들어오면서 Spring Security 가 클래스패스에 올라오면 기본값으로 전 요청이 잠긴다. 실제 인증/인가 로직은 후속(팀원)이
- * 채우므로, 그 전까지 기존 엔드포인트 동작을 깨지 않도록 전 요청을 permitAll 로 연다.
+ * <p>보안 모드는 두 가지고 <b>Spring 프로필 {@code oauth} 하나가</b> 어느 쪽인지 정한다. 이 파일은 그 프로필이 <b>아닐 때</b>의 체인만 갖는다
+ * — {@code oauth} 체인은 {@code auth} 모듈이 소유한다({@code auth/config/OAuthSecurityConfig}).
  *
- * <p>TODO(멀티유저 인증 — 팀원):
+ * <p><b>왜 나눴나</b> — 한 파일에 두 체인을 두면 {@code common} 이 {@code auth} 의 내부 구현(OIDC 사용자 서비스·로그인 예외·인증 실패
+ * 핸들러)을 직접 import 해야 한다. 그건 "모듈 root 에는 다른 모듈이 import 하는 공개 계약만 둔다"는 규칙을 정면으로 넘는 것이고, 배선이 불가피해 보인다는
+ * 이유로 넘기 시작하면 다음에 또 넘어도 아무 신호가 없다. 체인을 소유 모듈로 옮기면 그 import 자체가 사라진다.
  *
- * <ul>
- *   <li>{@code .oauth2Login()} 으로 Google 로그인 배선(application.yml 의 registration.google 주석 해제).
- *   <li>인증된 principal 의 OAuth {@code sub} 로 {@code app_user} 를 (provider, subject) 조회/생성.
- *   <li>요청 컨텍스트에 현재 사용자 {@code user_id} 를 주입 → 리포지토리/파이프라인이 user_id 로 스코프.
- *   <li>authorizeHttpRequests 를 실제 정책(로그인 필요/공개 경로 구분)으로 교체.
- *   <li>CSRF 재검토 — 지금은 토큰 없는 stub 이라 disable 했지만, 세션 기반 oauth2Login 이 붙으면 상태변경 POST(capture·review
- *       승인/반려·memory 전이)가 CSRF 표적이 된다. 로그인 배선과 동시에 CSRF 를 다시 켜고 stateless/SSE 엔드포인트만 예외 처리할 것.
- * </ul>
+ * <p>부트스트랩 모드를 남겨 두는 이유: 로컬 개발과 테스트가 Google client-id 없이 돌아가야 한다. 대신 <b>명시적 opt-in 이 없으면 부팅을
+ * 막는다</b>({@link BootstrapModeGuard}) — 이 모드가 배포로 새어 나가면 인스턴스가 열린 상태이고, 그때 로그 한 줄로는 아무도 모른다.
+ *
+ * <p>CSRF 를 끄는 것도 이 모드에서만이다: 훔칠 세션이 없으므로 CSRF 방어가 지킬 것이 없고, 켜 두면 토큰 없이 호출하는 개발·테스트가 전부 403 이 된다.
  */
 @Configuration
 public class SecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Profile("!oauth")
+    SecurityFilterChain bootstrapSecurityFilterChain(HttpSecurity http) throws Exception {
+        log.warn(
+                "보안 모드: bootstrap — 인증 없음, 모든 요청이 app_user.id=1 로 스코프된다."
+                        + " 인터넷에 노출하지 말 것(로그인 활성화: SPRING_PROFILES_ACTIVE=oauth).");
+
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
         return http.build();
     }
 }

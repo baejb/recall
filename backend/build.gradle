@@ -79,6 +79,17 @@ tasks.register('releaseGate', Test) {
 	}
 }
 
+// 부트스트랩 모드(인증 없음)는 명시적 opt-in 이 있어야 부팅된다(BootstrapModeGuard).
+// opt-in 값을 여기서만 주는 이유: .env.example 은 복사해서 배포하는 템플릿이라 거기 적으면 무인증이
+// 배포까지 따라오고 플래그 이름만 바뀐 같은 구멍이 된다. bootRun·test 는 개발 실행 경로이고,
+// 배포 산출물(bootJar)은 이 경로를 거치지 않으므로 아무것도 물려받지 않는다.
+tasks.withType(Test).configureEach {
+	environment 'RECALL_BOOTSTRAP_MODE', 'true'
+}
+tasks.named('bootRun') {
+	environment 'RECALL_BOOTSTRAP_MODE', 'true'
+}
+
 // 기존 코드가 4칸 들여쓰기이므로 google-java-format 의 AOSP(4칸) 스타일로 맞춘다.
 // 포맷 검사: ./gradlew spotlessCheck   ·   자동 정리: ./gradlew spotlessApply
 spotless {
