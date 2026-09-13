@@ -79,10 +79,31 @@ export interface ReviewCard {
   kn: KnFields
 }
 
-/** 검토 대기 항목(원본 1개 → 카드 여러 개). */
+/**
+ * S4 유사 판정 — 이 검토 항목이 **기존 기억과 어떤 관계인지**.
+ *
+ * `UNKNOWN` 은 백엔드가 프론트가 모르는 값을 보냈을 때다. 이걸 `NEW` 로 뭉개면 관계가 있는 항목이
+ * 관계 없는 것처럼 보인다(조용한 실패) — 그래서 별도 값으로 둔다.
+ */
+export type Judgement = 'NEW' | 'RECURRENCE' | 'SUPPLEMENT' | 'CONFLICT' | 'UNKNOWN'
+
+/**
+ * 검토 대기 항목(원본 1개 → 카드 여러 개).
+ *
+ * `judgement`·`targetMemoryId`·`judgeReason` 은 **선택 필드가 아니다**. 검토자가 승인 여부를 판단하는
+ * 근거이고, 특히 `CONFLICT` 는 기존 기억과 모순된다는 뜻이라 그 사실을 모른 채 승인하면 승인 게이트가
+ * 형식만 남는다(불변 원칙 3: 충돌은 자동 덮어쓰기 금지, 두 기록 보존 후 검토 요청). 실제로 이 세 값은
+ * 백엔드가 내려주는데 어댑터가 버려서 화면에 닿지 못했다. 필수로 두어 다시 빠뜨리면 컴파일이 깨지게
+ * 한다 — 프론트에 테스트 러너가 없어 타입이 회귀 테스트의 자리를 대신한다.
+ */
 export interface Review {
   id: string
   captureId: string
+  judgement: Judgement
+  /** 판정 대상 기존 기억. 신규면 null. */
+  targetMemoryId: string | null
+  /** 판정 근거(LLM 이 남긴 설명). 없으면 빈 문자열. */
+  judgeReason: string
   cards: ReviewCard[]
 }
 

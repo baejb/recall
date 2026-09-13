@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useRecall } from '../hooks/useRecall'
 import { useToast } from '../hooks/useToast'
 import { TYPE_META } from '../lib/typeMeta'
+import { JUDGEMENT_META } from '../lib/judgement'
 import { KnowledgeCardView } from '../components/KnowledgeCardView'
 import { TroubleshootingCardView } from '../components/TroubleshootingCardView'
 import { CaptureRawView } from '../components/CaptureRawView'
@@ -51,6 +52,8 @@ export function ReviewDetailPage() {
     )
   }
 
+  const judgeMeta = JUDGEMENT_META[review.judgement]
+
   const approve = async () => {
     setBusy(true)
     try {
@@ -84,6 +87,37 @@ export function ReviewDetailPage() {
       <p className="lede">
         AI가 뽑은 내용이에요. 확인하고 <b>승인</b>하면 내 기억에 저장돼요. 아니면 <b>반려</b>하세요.
       </p>
+
+      {/*
+        기존 기억과의 관계(S4 판정)를 승인 버튼보다 위에 둔다. 백엔드는 충돌을 자동으로 덮어쓰지 않고
+        사람에게 넘기는데(불변 원칙 3), 그 사실이 화면에 없으면 검토자는 모순을 모른 채 승인한다 —
+        게이트가 형식만 남는다.
+      */}
+      <div className="card pad" style={{ marginBottom: 14 }}>
+        <div className="between">
+          <b>기존 기억과의 관계</b>
+          <span className={`pill ${judgeMeta.tone}`}>{judgeMeta.label}</span>
+        </div>
+        <div className={judgeMeta.tone === 'bad' ? 'note bad' : 'note'}>
+          <b>안내</b>
+          <span>{judgeMeta.hint}</span>
+        </div>
+        {review.judgeReason && (
+          <div className="note">
+            <b>판정 근거</b>
+            <span>{review.judgeReason}</span>
+          </div>
+        )}
+        {review.targetMemoryId && (
+          <button
+            className="btn sm"
+            style={{ marginTop: 12 }}
+            onClick={() => navigate(`/memories/${review.targetMemoryId}`)}
+          >
+            관련 기억 #{review.targetMemoryId} 열기 ›
+          </button>
+        )}
+      </div>
 
       {review.cards.map((c, ci) => {
         const meta = TYPE_META[c.type]

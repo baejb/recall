@@ -6,6 +6,7 @@ import type {
   TroubleshootingCard,
 } from './dto'
 import type {
+  Judgement,
   Memory,
   MemoryTypeKey,
   Review,
@@ -151,6 +152,24 @@ export function toMemory(r: MemoryResponse): Memory {
   }
 }
 
+/**
+ * 백엔드 판정 문자열 → 화면 모델.
+ *
+ * 모르는 값을 `NEW` 로 접지 않는다 — 관계가 있는 항목이 관계 없는 것처럼 보이면 검토자가 모순을 모른 채
+ * 승인한다(불변 원칙 6: 조용한 실패 금지). 모르면 모른다고 표시한다.
+ */
+export function toJudgement(raw: string | null | undefined): Judgement {
+  switch (raw) {
+    case 'NEW':
+    case 'RECURRENCE':
+    case 'SUPPLEMENT':
+    case 'CONFLICT':
+      return raw
+    default:
+      return 'UNKNOWN'
+  }
+}
+
 export function toReview(r: ReviewItemResponse): Review {
   const card = parseCard(r.proposed)
   const type = toTypeKey(r.memoryType)
@@ -166,5 +185,13 @@ export function toReview(r: ReviewItemResponse): Review {
       keywords: kn.keywords ?? [],
     },
   }
-  return { id: String(r.id), captureId: String(r.captureId), cards: [reviewCard] }
+  return {
+    id: String(r.id),
+    captureId: String(r.captureId),
+    // 이 세 줄이 없어서 판정이 화면에 닿지 못했다(목록은 "신규" 하드코딩, 상세는 표시 없음).
+    judgement: toJudgement(r.judgement),
+    targetMemoryId: r.targetMemoryId == null ? null : String(r.targetMemoryId),
+    judgeReason: r.judgeReason ?? '',
+    cards: [reviewCard],
+  }
 }
