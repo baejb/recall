@@ -1,0 +1,62 @@
+[
+  {
+    "id": "oom-resolved",
+    "input": "배포하고 컨테이너가 5분마다 죽었다. 로그에 exit 137, OOMKilled. 환경은 Docker 27, 메모리 한도 2GB. docker restart 해봤는데 5분 뒤 또 죽었고, heap dump 분석했더니 누수는 없었다. 메모리 한도를 4GB로 올리고 -XX:MaxRAMPercentage=75 를 줬더니 에러가 사라졌다.",
+    "expectedStatus": "RESOLVED",
+    "minAttempts": 3,
+    "mustMentionInSignatureOrError": ["137"],
+    "mustHaveRootCause": true,
+    "mustHaveSolution": true,
+    "failedAttemptsAtLeast": 2
+  },
+  {
+    "id": "ci-classnotfound-unresolved",
+    "input": "CI 에서만 테스트가 전부 ClassNotFoundException 으로 실패한다. 로컬에서는 잘 된다. 캐시 지워봤는데 그대로고, JDK 버전도 맞다. 아직 원인을 모르겠다.",
+    "expectedStatus": "UNRESOLVED",
+    "minAttempts": 2,
+    "mustMentionInSignatureOrError": ["ClassNotFoundException"],
+    "mustHaveRootCause": false,
+    "mustHaveSolution": false,
+    "failedAttemptsAtLeast": 2
+  },
+  {
+    "id": "gateway-502-partial",
+    "input": "간헐적으로 502 가 뜬다. nginx 앞단이다. keepalive_timeout 을 75초로 늘렸더니 빈도가 하루 20건에서 2건으로 줄었는데 완전히 없어지진 않았다. upstream 쪽 로그는 깨끗하다.",
+    "expectedStatus": "PARTIAL",
+    "minAttempts": 1,
+    "mustMentionInSignatureOrError": ["502"],
+    "mustHaveRootCause": false,
+    "mustHaveSolution": false,
+    "failedAttemptsAtLeast": 0
+  },
+  {
+    "id": "regression-after-fix",
+    "input": "지난주에 커넥션 풀을 20으로 올려서 타임아웃이 해결된 걸로 봤다. 그런데 오늘 같은 SQLTimeoutException 이 다시 났다. 풀 설정은 그대로고, 이번엔 슬로우 쿼리 하나가 커넥션을 오래 잡고 있었다. 아직 그 쿼리는 안 고쳤다.",
+    "expectedStatus": "UNRESOLVED",
+    "minAttempts": 1,
+    "mustMentionInSignatureOrError": ["SQLTimeoutException"],
+    "mustHaveRootCause": true,
+    "mustHaveSolution": false,
+    "failedAttemptsAtLeast": 0
+  },
+  {
+    "id": "permission-denied-resolved",
+    "input": "도커 볼륨 마운트한 /data 에 쓰기가 안 됐다. permission denied. 호스트 uid 는 1000 인데 컨테이너는 uid 999 로 돌고 있었다. chown -R 999:999 /data 로 맞추니 해결.",
+    "expectedStatus": "RESOLVED",
+    "minAttempts": 1,
+    "mustMentionInSignatureOrError": ["permission denied"],
+    "mustHaveRootCause": true,
+    "mustHaveSolution": true,
+    "failedAttemptsAtLeast": 0
+  },
+  {
+    "id": "masked-secret-in-input",
+    "input": "provider 호출이 401 로 떨어졌다. 헤더에 x-api-key: ⟨SECRET⟩ 를 넣었는데도 안 됐다. 키를 재발급해서 다시 넣으니 통과했다.",
+    "expectedStatus": "RESOLVED",
+    "minAttempts": 1,
+    "mustMentionInSignatureOrError": ["401"],
+    "mustHaveRootCause": false,
+    "mustHaveSolution": true,
+    "failedAttemptsAtLeast": 0
+  }
+]
